@@ -1,0 +1,84 @@
+// To view the default settings, hold "alt" while clicking on the "Settings" button.
+// For documentation on these settings, see: https://aka.ms/terminal-documentation
+{
+  "$schema": "https://aka.ms/terminal-profiles-schema",
+  "defaultProfile": "{reducted}",
+  "initialCols": 120,
+  "initialRows": 30,
+  "showTabsInTitlebar": true,
+  "showTerminalTitleInTitlebar": true,
+  "requestedTheme": "system",
+  "snapToGridOnResize": false,
+  "wordDelimiters": " /\\()\"'-.,:;<>~!@#$%^&*|+=[]{}~?\u2502",
+  "profiles": {
+    "defaults": {
+      // "backgroundImage": "ms-appdata:///roaming/mrdemonwolf.gif",
+      // "backgroundImageStretchMode": "fill",
+      "closeOnExit": "always",
+      "colorScheme": "Monokai Pro (Filter Octagon)",
+      "cursorColor": "#FFFFFF",
+      "cursorShape": "bar",
+      "fontFace": "Cascadia Code PL",
+      "fontSize": 10,
+      "historySize": 9001,
+      "padding": "0, 0, 0, 0",
+      "useAcrylic": true,
+      "acrylicOpacity": 0.85000002384185791
+    },
+    "list": [
+      {
+        "guid": "{reducted}",
+        "name": "Ubuntu",
+        "source": "Windows.Terminal.Wsl",
+        "startingDirectory": "//wsl$/Ubuntu/home/mrdem/",
+        "icon": "ms-appdata:///roaming/ubuntu.png",
+        "snapOnInput": true
+      },
+      // Make changes here to the powershell.exe profile
+      {
+        "guid": "{reducted}",
+        "name": "Windows PowerShell",
+        "commandline": "powershell.exe",
+        "startingDirectory": "%USERPROFILE%",
+        "icon": "ms-appx:///ProfileIcons/{reducted}.png"
+      },
+      // Make changes here to the cmd.exe profile
+      {
+        "guid": "{reducted}",
+        "name": "cmd",
+        "commandline": "cmd.exe",
+        "startingDirectory": "%USERPROFILE%",
+        "icon": "ms-appx:///ProfileIcons/{reducted}.png"
+      },
+      {
+        "guid": "{b453ae62-4e3d-5e58-b989-0a998ec441b8}",
+        "name": "Azure Cloud Shell",
+        "source": "Windows.Terminal.Azure"
+      }
+    ]
+  },
+  "schemes": [
+    {
+      "name": "Monokai Pro (Filter Octagon)",
+      "background": "#282A3A",
+      "black": "#282A3A",
+      "blue": "#FF9B5E",
+      "brightBlack": "#696D77",
+      "brightBlue": "#FF9B5E",
+      "brightCyan": "#9CD1BB",
+      "brightGreen": "#BAD761",
+      "brightPurple": "#C39AC9",
+      "brightRed": "#FF657A",
+      "brightWhite": "#EAF2F1",
+      "brightYellow": "#FFD76D",
+      "cyan": "#9CD1BB",
+      "foreground": "#EAF2F1",
+      "green": "#BAD761",
+      "purple": "#C39AC9",
+      "red": "#FF657A",
+      "white": "#EAF2F1",
+      "yellow": "#FFD76D"
+    }
+  ],
+  "keybindings": []
+}
