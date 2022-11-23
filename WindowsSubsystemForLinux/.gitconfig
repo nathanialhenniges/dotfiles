@@ -1,6 +1,0 @@
-[user]
-	name = reducted
-	email = reducted
-	signingkey = reducted
-[commit]
-	gpgsign = true
