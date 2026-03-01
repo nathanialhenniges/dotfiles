@@ -1,0 +1,7 @@
+alias hotspotFix='sudo sysctl net.inet.ip.ttl=65'
+alias hotspotUnfix='sudo sysctl net.inet.ip.ttl=64'
+alias movtogif='function _movtogif() { ffmpeg -hwaccel videotoolbox -i "$1" -vf "fps=15,scale=600:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 "${2:-output.gif}"; }; _movtogif'
+# API keys and secrets are stored in ~/.secrets (never committed)
+[[ -f ~/.secrets ]] && source ~/.secrets
+alias protoburn-sync="pnpm --dir ~/Developer/mrdemonwolf/protoburn sync"
+alias rmdsstore='find . -name ".DS_Store" -type f -delete'alias markedit='open -a "MarkEdit"'

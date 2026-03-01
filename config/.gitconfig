@@ -1,0 +1,10 @@
+[user]
+	email = 19924836+nathanialhenniges@users.noreply.github.com
+	name = Nathanial Henniges
+	signingKey = AFA037920622144D31F4569F0A9FFC7514E4A360
+[commit]
+	gpgSign = true
+[tag]
+	forceSignAnnotated = true
+[init]
+	defaultBranch = main
