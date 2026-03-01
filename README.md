@@ -1,6 +1,6 @@
-# dotfiles - Personal macOS Development Environment
+# dotfiles - Personal Development Environment
 
-Configuration files and setup scripts for my macOS development
+Configuration files and setup scripts for my development
 environment. Everything is managed with simple copy scripts —
 no symlinks, no stow, no risk of losing configs.
 
@@ -82,9 +82,9 @@ of the script.
 
 ### Prerequisites
 
-- macOS (Apple Silicon or Intel)
+- macOS (Apple Silicon or Intel) or Linux (Debian/Ubuntu)
 - Git
-- Homebrew (installed automatically by `install.sh` if missing)
+- Homebrew (installed automatically by `install.sh` on macOS)
 
 ### Setup
 
@@ -131,6 +131,20 @@ dotfiles/
 ├── .gitignore
 └── README.md
 ```
+
+## GitHub Codespaces
+
+This repo works automatically with
+[GitHub Codespaces](https://github.com/features/codespaces).
+When you create a Codespace, GitHub clones your `dotfiles` repo
+and runs `install.sh`. The script detects Linux and installs
+lightweight essentials (`zsh`, `git`, `curl`, `wget`, `fzf`)
+via `apt` instead of Homebrew. macOS-specific shell config
+(Homebrew paths, Android SDK, Oh My Posh, etc.) is skipped on
+Linux so your shell loads cleanly.
+
+To enable this, go to **Settings > Codespaces** on GitHub and
+set your dotfiles repository to `nathanialhenniges/dotfiles`.
 
 ## License
 

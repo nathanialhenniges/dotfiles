@@ -2,15 +2,22 @@
 # Install dotfiles onto a new machine
 DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_DIR="$DOTFILES_DIR/config"
+OS="$(uname -s)"
 
-# Install Homebrew if missing
-if ! command -v brew &>/dev/null; then
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  eval "$(/opt/homebrew/bin/brew shellenv)"
+# Install platform-specific packages
+if [[ "$OS" == "Darwin" ]]; then
+  # macOS: Install Homebrew if missing
+  if ! command -v brew &>/dev/null; then
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  fi
+
+  # Install packages from Brewfile
+  brew bundle --file="$DOTFILES_DIR/Brewfile"
+else
+  # Linux/Codespaces: Install essentials via apt
+  sudo apt update && sudo apt install -y zsh git curl wget fzf
 fi
-
-# Install packages from Brewfile
-brew bundle --file="$DOTFILES_DIR/Brewfile"
 
 # Copy dotfiles (with backup of existing files)
 for file in $(find "$CONFIG_DIR" -type f); do
