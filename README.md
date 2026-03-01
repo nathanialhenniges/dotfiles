@@ -1,93 +1,143 @@
-# dotfiles
+# dotfiles - Personal macOS Development Environment
 
-Personal dotfiles for macOS, managed with simple copy scripts. No symlinks, no stow — just straightforward file syncing.
+Configuration files and setup scripts for my macOS development
+environment. Everything is managed with simple copy scripts —
+no symlinks, no stow, no risk of losing configs.
 
-## What's included
+Your terminal is your workshop. Keep it sharp.
 
-| File | Description |
-|------|-------------|
-| `.zshrc` | Zsh configuration (Oh My Zsh, plugins, PATH setup) |
-| `.zprofile` | Zsh profile (Homebrew init, OrbStack) |
-| `.p10k.zsh` | Powerlevel10k prompt configuration |
-| `.profile` | Shell profile (ngrok completion) |
-| `.aliases` | Custom shell aliases |
-| `.gitconfig` | Git configuration (GPG signing, user info) |
-| `.npmrc` | npm registry configuration |
-| `.nuxtrc` | Nuxt telemetry settings |
-| `ohmyposh/mrdemonwolf.omp.json` | Oh My Posh prompt theme |
-| `Brewfile` | Homebrew packages, casks, and taps |
+## Features
 
-## Tools & software
+- **One-command setup** — Clone the repo and run `install.sh`
+  to bootstrap a new machine with all dotfiles and packages.
+- **Simple sync** — Run `sync.sh` to capture your latest
+  system dotfiles into the repo for version control.
+- **Automatic backups** — Existing dotfiles are backed up
+  before being overwritten during installation.
+- **Brewfile** — Every Homebrew package, cask, Mac App Store
+  app, and VS Code extension tracked in a single file.
+- **Secrets management** — API keys and tokens stay in
+  `~/.secrets`, which is never committed to git.
 
-- **Shell:** zsh + [Oh My Zsh](https://ohmyz.sh/)
-- **Prompt:** [Oh My Posh](https://ohmyposh.dev/) with custom theme
-- **Plugins:** fzf-tab, zsh-autosuggestions, zsh-syntax-highlighting
-- **Node:** [fnm](https://github.com/Schniz/fnm) (Fast Node Manager)
-- **Terminal:** [Ghostty](https://ghostty.org/)
-- **Packages:** Managed via [Homebrew](https://brew.sh/)
+## Getting Started
 
-## Quick start (new machine)
+1. Clone the repository:
 
 ```bash
-git clone https://github.com/nathanialhenniges/dotfiles.git ~/Developer/nathanialhenniges/dotfiles
+git clone https://github.com/nathanialhenniges/dotfiles.git \
+  ~/Developer/nathanialhenniges/dotfiles
+```
+
+2. Run the install script:
+
+```bash
 cd ~/Developer/nathanialhenniges/dotfiles
 ./install.sh
 ```
 
-This will:
-1. Install Homebrew (if missing)
-2. Install all packages from the Brewfile
-3. Back up any existing dotfiles (as `*.backup`)
-4. Copy dotfiles into place
+3. Restart your terminal to apply changes.
 
-## Syncing changes
+## Usage
 
-After making changes to your dotfiles on your system:
+Sync your current system dotfiles into the repo:
 
 ```bash
 ./sync.sh
+```
+
+Review the changes, then commit and push:
+
+```bash
+git diff
 git add .
 git commit -m "Update dotfiles"
 git push
 ```
 
-**Important:** After syncing, always review `git diff` before committing to ensure no secrets slip in.
+Install dotfiles onto a new machine:
 
-## Adding new dotfiles
+```bash
+./install.sh
+```
 
-1. Add the filename to the `files` array in `sync.sh`
-2. Run `./sync.sh` to pull it into the repo
-3. Commit and push
+Add a new dotfile by editing the `files` array in `sync.sh`,
+then running `./sync.sh` to pull it in. For nested paths under
+`~/.config/`, add a `cp` command in the nested config section
+of the script.
 
-For nested files (like `.config/` paths), add a `cp` command in the nested config section of `sync.sh`.
+## Tech Stack
 
-## Secrets
+| Layer           | Technology                              |
+|-----------------|-----------------------------------------|
+| Shell           | zsh + Oh My Zsh                         |
+| Prompt          | Oh My Posh (custom theme)               |
+| Plugins         | fzf-tab, zsh-autosuggestions, zsh-syntax-highlighting |
+| Node Manager    | fnm                                     |
+| Package Manager | Homebrew                                |
+| Terminal        | Ghostty                                 |
+| Editor          | Visual Studio Code                      |
+| Git             | GPG commit signing via GnuPG            |
 
-Sensitive values (API keys, tokens) are **never** committed. Instead:
+## Development
 
-1. Store them in `~/.secrets` on your machine
-2. Both `.zshrc` and `.aliases` source `~/.secrets` automatically
-3. `.secrets` is in `.gitignore`
+### Prerequisites
 
-## File structure
+- macOS (Apple Silicon or Intel)
+- Git
+- Homebrew (installed automatically by `install.sh` if missing)
+
+### Setup
+
+1. Clone the repo:
+
+```bash
+git clone https://github.com/nathanialhenniges/dotfiles.git \
+  ~/Developer/nathanialhenniges/dotfiles
+```
+
+2. Run the installer:
+
+```bash
+cd ~/Developer/nathanialhenniges/dotfiles
+./install.sh
+```
+
+### Development Scripts
+
+- `./sync.sh` — Pull dotfiles from your system into the repo
+  and regenerate the Brewfile.
+- `./install.sh` — Install Homebrew, restore packages from
+  the Brewfile, and copy dotfiles into your home directory.
+
+## Project Structure
 
 ```
 dotfiles/
-├── config/           # Dotfiles mirroring ~/
-│   ├── .zshrc
-│   ├── .zprofile
-│   ├── .p10k.zsh
-│   ├── .profile
-│   ├── .aliases
-│   ├── .gitconfig
-│   ├── .npmrc
-│   ├── .nuxtrc
+├── config/                    # Dotfiles mirroring ~/
+│   ├── .zshrc                 # Zsh configuration
+│   ├── .zprofile              # Zsh profile (Homebrew init)
+│   ├── .p10k.zsh              # Powerlevel10k prompt config
+│   ├── .profile               # Shell profile
+│   ├── .aliases               # Custom shell aliases
+│   ├── .gitconfig             # Git user and signing config
+│   ├── .npmrc                 # npm registry config
+│   ├── .nuxtrc                # Nuxt telemetry settings
 │   └── .config/
 │       └── ohmyposh/
-│           └── mrdemonwolf.omp.json
-├── Brewfile          # Homebrew packages
-├── sync.sh           # Pull dotfiles from system → repo
-├── install.sh        # Push dotfiles from repo → system
+│           └── mrdemonwolf.omp.json  # Oh My Posh theme
+├── Brewfile                   # Homebrew packages and casks
+├── sync.sh                    # System -> repo sync script
+├── install.sh                 # Repo -> system install script
 ├── .gitignore
 └── README.md
 ```
+
+## License
+
+![GitHub license](https://img.shields.io/github/license/nathanialhenniges/dotfiles.svg?style=for-the-badge&logo=github)
+
+## Contact
+
+- Discord: [Join my server](https://mrdwolf.net/discord)
+
+Made with love by [MrDemonWolf, Inc.](https://www.mrdemonwolf.com)
