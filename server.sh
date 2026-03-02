@@ -1,5 +1,5 @@
 #!/bin/bash
-# Bootstrap a remote Linux server with a clean zsh environment
+# Bootstrap a remote server (macOS or Linux) with a clean zsh environment
 # Usage: bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/server.sh)
 set -e
 
@@ -17,9 +17,25 @@ else
   git clone "$REPO_URL" "$DOTFILES_DIR"
 fi
 
-# Install essentials via apt
+# Install essentials
 echo "==> Installing packages..."
-sudo apt update && sudo apt install -y zsh git curl wget fzf
+OS="$(uname -s)"
+if [[ "$OS" == "Darwin" ]]; then
+  # macOS: Install Homebrew if missing
+  if ! command -v brew &>/dev/null; then
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Apple Silicon at /opt/homebrew, Intel at /usr/local
+    if [[ -f /opt/homebrew/bin/brew ]]; then
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [[ -f /usr/local/bin/brew ]]; then
+      eval "$(/usr/local/bin/brew shellenv)"
+    fi
+  fi
+  brew install zsh git curl wget fzf
+else
+  # Linux: Install via apt
+  sudo apt update && sudo apt install -y zsh git curl wget fzf
+fi
 
 # Install Oh My Zsh (skip if already installed)
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
