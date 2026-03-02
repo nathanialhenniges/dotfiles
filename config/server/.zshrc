@@ -4,6 +4,9 @@ export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME=""
 
 # Oh My Posh prompt
+if ! command -v oh-my-posh &>/dev/null && [[ -x /usr/local/bin/oh-my-posh ]]; then
+  export PATH="/usr/local/bin:$PATH"
+fi
 eval "$(oh-my-posh init zsh --config ~/.config/ohmyposh/mrdemonwolf-server.omp.json)"
 
 plugins=(
