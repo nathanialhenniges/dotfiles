@@ -9,7 +9,8 @@ Your terminal is your workshop. Keep it sharp.
 ## Features
 
 - **One-command setup** — Clone the repo and run `install.sh`
-  to bootstrap a new machine with all dotfiles and packages.
+  to bootstrap a new machine with all dotfiles, packages,
+  Oh My Zsh + plugins, and Node.js.
 - **Simple sync** — Run `sync.sh` to capture your latest
   system dotfiles into the repo for version control.
 - **Automatic backups** — Existing dotfiles are backed up
@@ -106,8 +107,9 @@ cd ~/Developer/nathanialhenniges/dotfiles
 
 - `./sync.sh` — Pull dotfiles from your system into the repo
   and regenerate the Brewfile.
-- `./install.sh` — Install Homebrew, restore packages from
-  the Brewfile, and copy dotfiles into your home directory.
+- `./install.sh` — Install Homebrew (macOS) or apt essentials
+  (Linux), Oh My Zsh + plugins, copy dotfiles, and set up
+  Node.js via fnm.
 
 ## Project Structure
 
@@ -123,6 +125,8 @@ dotfiles/
 │   ├── .npmrc                 # npm registry config
 │   ├── .nuxtrc                # Nuxt telemetry settings
 │   └── .config/
+│       ├── ghostty/
+│       │   └── config                # Ghostty terminal config
 │       └── ohmyposh/
 │           └── mrdemonwolf.omp.json  # Oh My Posh theme
 ├── Brewfile                   # Homebrew packages and casks
