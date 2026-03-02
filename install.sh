@@ -24,6 +24,16 @@ else
   sudo apt update && sudo apt install -y zsh git curl wget fzf
 fi
 
+# Install Oh My Zsh if missing
+if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+  RUNZSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+fi
+
+# Install Oh My Zsh plugins
+git clone https://github.com/Aloxaf/fzf-tab ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/fzf-tab 2>/dev/null
+git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions 2>/dev/null
+git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting 2>/dev/null
+
 # Copy dotfiles (with backup of existing files)
 for file in $(find "$CONFIG_DIR" -type f); do
   relative="${file#$CONFIG_DIR/}"
@@ -43,5 +53,15 @@ for file in $(find "$CONFIG_DIR" -type f); do
   cp "$file" "$target"
   echo "Installed $target"
 done
+
+# Load Homebrew paths so fnm is available
+source ~/.zprofile 2>/dev/null
+
+# Install latest Node.js via fnm and set as default
+if command -v fnm &>/dev/null; then
+  fnm install --latest
+  fnm default "$(fnm ls | head -1 | awk '{print $2}')"
+  echo "Node.js $(node --version) installed and set as default via fnm"
+fi
 
 echo "Done! Restart your terminal to apply changes."
