@@ -110,6 +110,8 @@ cd ~/Developer/nathanialhenniges/dotfiles
 - `./install.sh` — Install Homebrew (macOS) or apt essentials
   (Linux), Oh My Zsh + plugins, copy dotfiles, and set up
   Node.js via fnm.
+- `./server.sh` — Bootstrap a remote Linux server with zsh,
+  Oh My Zsh, and minimal server configs from `config/server/`.
 
 ## Project Structure
 
@@ -124,6 +126,9 @@ dotfiles/
 │   ├── .gitconfig             # Git user and signing config
 │   ├── .npmrc                 # npm registry config
 │   ├── .nuxtrc                # Nuxt telemetry settings
+│   ├── server/                # Server-only configs
+│   │   ├── .zshrc             # Minimal server zsh config
+│   │   └── .aliases           # Server-specific aliases
 │   └── .config/
 │       ├── ghostty/
 │       │   └── config                # Ghostty terminal config
@@ -132,9 +137,23 @@ dotfiles/
 ├── Brewfile                   # Homebrew packages and casks
 ├── sync.sh                    # System -> repo sync script
 ├── install.sh                 # Repo -> system install script
+├── server.sh                  # Remote server bootstrap script
 ├── .gitignore
 └── README.md
 ```
+
+## Server Setup
+
+Bootstrap a remote Linux server with a clean zsh environment
+using a single command over SSH:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/server.sh)
+```
+
+This installs zsh, Oh My Zsh + plugins, and copies a minimal
+shell config from `config/server/` — no macOS tooling, no
+Homebrew, no Node.js. Safe to re-run to pull updated configs.
 
 ## GitHub Codespaces
 

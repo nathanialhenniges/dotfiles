@@ -35,7 +35,7 @@ git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-m
 git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting 2>/dev/null
 
 # Copy dotfiles (with backup of existing files)
-for file in $(find "$CONFIG_DIR" -type f); do
+for file in $(find "$CONFIG_DIR" -type f -not -path "$CONFIG_DIR/server/*"); do
   relative="${file#$CONFIG_DIR/}"
 
   # Ghostty stores config in Application Support on macOS
