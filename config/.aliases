@@ -1,7 +1,6 @@
 alias hotspotFix='sudo sysctl net.inet.ip.ttl=65'
 alias hotspotUnfix='sudo sysctl net.inet.ip.ttl=64'
 alias movtogif='function _movtogif() { ffmpeg -hwaccel videotoolbox -i "$1" -vf "fps=15,scale=600:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 "${2:-output.gif}"; }; _movtogif'
-export PROTOBURN_API_KEY="676d8eb4505477a487084dc4f534a38be31791066da9e74cc42e8647038b01c1"          
 alias protoburn-sync="pnpm --dir ~/Developer/mrdemonwolf/protoburn sync"
 alias rmdsstore='find . -name ".DS_Store" -type f -delete'
 alias markedit='open -a "MarkEdit"'
