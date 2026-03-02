@@ -25,6 +25,9 @@ done
 mkdir -p "$CONFIG_DIR/.config/ohmyposh"
 cp "$HOME/.config/ohmyposh/mrdemonwolf.omp.json" "$CONFIG_DIR/.config/ohmyposh/" 2>/dev/null
 
+mkdir -p "$CONFIG_DIR/.config/ghostty"
+cp "$HOME/Library/Application Support/com.mitchellh.ghostty/config" "$CONFIG_DIR/.config/ghostty/config" 2>/dev/null
+
 # Regenerate Brewfile
 brew bundle dump --force --file="$DOTFILES_DIR/Brewfile"
 echo "Brewfile updated"

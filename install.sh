@@ -21,7 +21,15 @@ fi
 
 # Copy dotfiles (with backup of existing files)
 for file in $(find "$CONFIG_DIR" -type f); do
-  target="$HOME/${file#$CONFIG_DIR/}"
+  relative="${file#$CONFIG_DIR/}"
+
+  # Ghostty stores config in Application Support on macOS
+  if [[ "$relative" == ".config/ghostty/"* && "$OS" == "Darwin" ]]; then
+    target="$HOME/Library/Application Support/com.mitchellh.ghostty/${relative#.config/ghostty/}"
+  else
+    target="$HOME/$relative"
+  fi
+
   if [ -f "$target" ]; then
     cp "$target" "$target.backup"
     echo "Backed up $target → $target.backup"
