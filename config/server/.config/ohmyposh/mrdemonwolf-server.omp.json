@@ -8,12 +8,20 @@
       "alignment": "left",
       "segments": [
         {
-          "type": "session",
+          "type": "os",
           "style": "diamond",
           "foreground": "#273136",
-          "background": "#fc9867",
+          "background": "#f2fffc",
           "leading_diamond": "\ue0b6",
           "trailing_diamond": "",
+          "template": " {{.Icon}} "
+        },
+        {
+          "type": "session",
+          "style": "powerline",
+          "powerline_symbol": "\ue0b4",
+          "foreground": "#273136",
+          "background": "#fc9867",
           "template": " {{ .UserName }}@{{ .HostName }} "
         },
         {
