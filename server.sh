@@ -49,6 +49,16 @@ git clone https://github.com/Aloxaf/fzf-tab "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/cust
 git clone https://github.com/zsh-users/zsh-autosuggestions "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" 2>/dev/null || true
 git clone https://github.com/zsh-users/zsh-syntax-highlighting "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting" 2>/dev/null || true
 
+# Install Oh My Posh
+if ! command -v oh-my-posh &>/dev/null; then
+  echo "==> Installing Oh My Posh..."
+  if [[ "$OS" == "Darwin" ]]; then
+    brew install jandedobbeleer/oh-my-posh/oh-my-posh
+  else
+    curl -s https://ohmyposh.dev/install.sh | bash -s
+  fi
+fi
+
 # Copy server configs to home directory (backup existing files first)
 echo "==> Installing server configs..."
 SERVER_CONFIG="$DOTFILES_DIR/config/server"
