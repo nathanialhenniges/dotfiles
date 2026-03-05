@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bootstrap a shared hosting environment with a clean bash setup (no root required)
-# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/sharedhosting.sh)
+# Usage: curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/sharedhosting.sh | bash
 set -e
 
 REPO_URL="https://github.com/nathanialhenniges/dotfiles.git"
