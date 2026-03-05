@@ -24,16 +24,26 @@ fi
 curl -fsSL "$BASE_URL/.aliases" -o "$HOME/.aliases"
 echo "    Installed ~/.aliases"
 
-# Source .bashrc from .bash_profile if not already done (login shells)
-if [ -f "$HOME/.bash_profile" ]; then
-  if ! grep -q '\.bashrc' "$HOME/.bash_profile" 2>/dev/null; then
-    echo '[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"' >> "$HOME/.bash_profile"
-    echo "    Added .bashrc source to .bash_profile"
+# Add Ghostty terminal fix and .bashrc source to all login shell configs
+GHOSTTY_FIX='[ "$TERM" = "xterm-ghostty" ] && export TERM="xterm-256color"'
+BASHRC_SOURCE='[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"'
+
+for rcfile in "$HOME/.bash_profile" "$HOME/.profile"; do
+  if [ -f "$rcfile" ]; then
+    if ! grep -q 'xterm-ghostty' "$rcfile" 2>/dev/null; then
+      # Prepend the fix so it runs before anything else
+      printf '%s\n%s' "$GHOSTTY_FIX" "$(cat "$rcfile")" > "$rcfile"
+      echo "    Added Ghostty fix to $rcfile"
+    fi
+    if ! grep -q '\.bashrc' "$rcfile" 2>/dev/null; then
+      echo "$BASHRC_SOURCE" >> "$rcfile"
+      echo "    Added .bashrc source to $rcfile"
+    fi
+  else
+    printf '%s\n%s\n' "$GHOSTTY_FIX" "$BASHRC_SOURCE" > "$rcfile"
+    echo "    Created $rcfile"
   fi
-else
-  echo '[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"' > "$HOME/.bash_profile"
-  echo "    Created .bash_profile"
-fi
+done
 
 echo ""
 echo "==> Done! Start a new shell session or run: source ~/.bashrc"
