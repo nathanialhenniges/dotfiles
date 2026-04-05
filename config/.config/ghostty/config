@@ -25,8 +25,8 @@ window-theme = auto
 window-colorspace = display-p3
 
 # -- Transparency & Blur (the "glass" in Liquid Glass) -----------------------
-background-opacity = 0.7
-background-blur-radius = 40
+background-opacity = 0.90
+background-blur-radius = 90
 
 # -- Window ------------------------------------------------------------------
 window-padding-x = 12
@@ -76,5 +76,5 @@ keybind = cmd+zero=reset_font_size
 # -- Misc --------------------------------------------------------------------
 copy-on-select = clipboard
 mouse-hide-while-typing = true
-confirm-close-surface = false
+confirm-close-surface = true
 link-url = true

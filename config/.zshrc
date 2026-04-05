@@ -111,3 +111,5 @@ bindkey "^[[B" history-search-forward
 # ── Secrets (API tokens, etc.) ─────────────────────────────
 # Store secrets in ~/.secrets (never committed to git)
 [[ -f ~/.secrets ]] && source ~/.secrets
+eval "$(direnv hook zsh)"
+eval "$(direnv hook zsh)"

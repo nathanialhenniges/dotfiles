@@ -1,6 +1,17 @@
+# ─── Network ────────────────────────────────────────────────────────────────
 alias hotspotFix='sudo sysctl net.inet.ip.ttl=65'
 alias hotspotUnfix='sudo sysctl net.inet.ip.ttl=64'
-alias movtogif='function _movtogif() { ffmpeg -hwaccel videotoolbox -i "$1" -vf "fps=15,scale=600:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 "${2:-output.gif}"; }; _movtogif'
-alias protoburn-sync="pnpm --dir ~/Developer/mrdemonwolf/protoburn sync"
+
+# ─── Utilities ──────────────────────────────────────────────────────────────
 alias rmdsstore='find . -name ".DS_Store" -type f -delete'
 alias markedit='open -a "MarkEdit"'
+
+# ─── Projects ───────────────────────────────────────────────────────────────
+alias protoburn-sync="pnpm --dir ~/Developer/mrdemonwolf/protoburn sync"
+
+# ─── Media Conversion ───────────────────────────────────────────────────────
+alias movtogif='function _movtogif() { local out="${2:-${1%.*}.gif}"; ffmpeg -hwaccel videotoolbox -i "$1" -vf "fps=15,scale=600:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 "$out"; }; _movtogif'
+alias towebm='function _towebm() { local out="${2:-${1%.*}.webm}"; ffmpeg -hwaccel videotoolbox -i "$1" -c:v libvpx-vp9 -crf 33 -b:v 0 -c:a libopus -vbr on -compression_level 10 "$out"; }; _towebm'
+alias towebmp4='function _towebmp4() { local out="${2:-${1%.*}.mp4}"; ffmpeg -hwaccel videotoolbox -i "$1" -c:v h264_videotoolbox -q:v 65 -c:a aac -movflags +faststart "$out"; }; _towebmp4'
+
+alias yolo="claude --dangerously-skip-permissions"
