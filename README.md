@@ -75,9 +75,13 @@ of the script.
 | Plugins         | fzf-tab, zsh-autosuggestions, zsh-syntax-highlighting |
 | Node Manager    | fnm                                     |
 | Package Manager | Homebrew                                |
-| Terminal        | Ghostty                                 |
+| Terminal        | Ghostty (Liquid Glass theme)            |
 | Editor          | Visual Studio Code                      |
 | Git             | GPG commit signing via GnuPG            |
+| Env Management  | direnv                                  |
+| Languages       | Node.js, Go, PHP, Terraform            |
+| Cloud           | AWS CLI, Google Cloud SDK               |
+| Mobile          | Android Studio, Xcode, React Native     |
 
 ## Development
 
@@ -112,6 +116,8 @@ cd ~/Developer/nathanialhenniges/dotfiles
   Node.js via fnm.
 - `./server.sh` — Bootstrap a remote Linux server with zsh,
   Oh My Zsh, and minimal server configs from `config/server/`.
+- `./sharedhosting.sh` — Bootstrap a shared hosting environment
+  (no root required, bash-based) with configs from `config/sharedhosting/`.
 
 ## Project Structure
 
@@ -129,15 +135,19 @@ dotfiles/
 │   ├── server/                # Server-only configs
 │   │   ├── .zshrc             # Minimal server zsh config
 │   │   └── .aliases           # Server-specific aliases
+│   ├── sharedhosting/         # Shared hosting configs (no root)
+│   │   ├── .bashrc            # Bash config for shared hosts
+│   │   └── .aliases           # Shared hosting aliases
 │   └── .config/
 │       ├── ghostty/
-│       │   └── config                # Ghostty terminal config
+│       │   └── config                # Ghostty terminal config (Liquid Glass)
 │       └── ohmyposh/
 │           └── mrdemonwolf.omp.json  # Oh My Posh theme
 ├── Brewfile                   # Homebrew packages and casks
 ├── sync.sh                    # System -> repo sync script
 ├── install.sh                 # Repo -> system install script
 ├── server.sh                  # Remote server bootstrap script
+├── sharedhosting.sh           # Shared hosting bootstrap (no root)
 ├── .gitignore
 └── README.md
 ```
@@ -154,6 +164,18 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/m
 This installs zsh, Oh My Zsh + plugins, and copies a minimal
 shell config from `config/server/` — no macOS tooling, no
 Homebrew, no Node.js. Safe to re-run to pull updated configs.
+
+## Shared Hosting Setup
+
+Bootstrap a shared hosting environment where you have no root
+access — pure bash, no package installs:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/sharedhosting.sh)
+```
+
+This copies configs from `config/sharedhosting/` to set up a
+comfortable shell environment on hosts like cPanel, Plesk, etc.
 
 ## GitHub Codespaces
 
