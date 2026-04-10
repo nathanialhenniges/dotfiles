@@ -39,6 +39,12 @@ python3 - << 'PYEOF'
 import os
 path = os.path.expanduser("~/.zshrc")
 c = open(path).read()
+
+# Prepend Ghostty TERM fix if not already present
+term_fix = '[[ "$TERM" == "xterm-ghostty" ]] && export TERM="xterm-256color"\n'
+if term_fix.strip() not in c:
+    c = term_fix + c
+
 fixes = [
     ('eval "$(fnm env', 'command -v fnm &>/dev/null && eval "$(fnm env'),
     ('eval "$(gh completion', 'command -v gh &>/dev/null && eval "$(gh completion'),
