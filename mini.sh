@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# mini.sh — Minimal Mac Mini setup: dotfiles + Oh My Zsh + Oh My Posh
+# mini.sh — Mac Mini setup: dotfiles + Oh My Zsh + core packages
 set -e
 
 REPO="https://github.com/nathanialhenniges/dotfiles"
@@ -11,6 +11,20 @@ if [[ -d "$DOTFILES" ]]; then
 else
   git clone "$REPO" "$DOTFILES"
 fi
+
+echo "→ Installing Homebrew..."
+if ! command -v brew &>/dev/null; then
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+fi
+# Load brew into current session
+if [[ -f /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+elif [[ -f /usr/local/bin/brew ]]; then
+  eval "$(/usr/local/bin/brew shellenv)"
+fi
+
+echo "→ Installing packages..."
+brew install fnm fzf direnv gh oh-my-posh
 
 echo "→ Installing Oh My Zsh..."
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
@@ -34,32 +48,17 @@ find "$DOTFILES/config" -type f \
   cp "$file" "$target"
 done
 
-echo "→ Patching .zshrc to guard missing tools..."
+echo "→ Adding Ghostty TERM fix to .zshrc..."
 python3 - << 'PYEOF'
 import os
 path = os.path.expanduser("~/.zshrc")
 c = open(path).read()
-
-# Prepend Ghostty TERM fix if not already present
 term_fix = '[[ "$TERM" == "xterm-ghostty" ]] && export TERM="xterm-256color"\n'
 if term_fix.strip() not in c:
     c = term_fix + c
-
-fixes = [
-    ('eval "$(fnm env', 'command -v fnm &>/dev/null && eval "$(fnm env'),
-    ('eval "$(gh completion', 'command -v gh &>/dev/null && eval "$(gh completion'),
-    ('eval "$(oh-my-posh', 'command -v oh-my-posh &>/dev/null && eval "$(oh-my-posh'),
-    ('source <(fzf --zsh)', 'command -v fzf &>/dev/null && source <(fzf --zsh)'),
-    ('eval "$(direnv hook', 'command -v direnv &>/dev/null && eval "$(direnv hook'),
-]
-for old, new in fixes:
-    c = c.replace(old, new)
 open(path, 'w').write(c)
-print("  .zshrc patched")
+print("  Done")
 PYEOF
-
-echo "→ Installing Oh My Posh..."
-curl -s https://ohmyposh.dev/install.sh | bash -s
 
 echo ""
 echo "✓ Done! Run: exec zsh"
