@@ -1,68 +1,85 @@
-#!/usr/bin/env bash
-# mini.sh — Mac Mini setup: dotfiles + Oh My Zsh + core packages
-set -e
-
+#!/bin/bash
+# mini.sh — Minimal dotfiles bootstrap (zsh + oh-my-posh, no full Brewfile)
 REPO="https://github.com/nathanialhenniges/dotfiles"
-DOTFILES="$HOME/.dotfiles"
+DOTFILES_DIR="$HOME/.dotfiles"
 
-echo "→ Cloning dotfiles..."
-if [[ -d "$DOTFILES" ]]; then
-  git -C "$DOTFILES" pull
+# Clone or update dotfiles repo
+if [[ -d "$DOTFILES_DIR/.git" ]]; then
+  echo "→ Updating dotfiles..."
+  git -C "$DOTFILES_DIR" pull
 else
-  git clone "$REPO" "$DOTFILES"
+  echo "→ Cloning dotfiles..."
+  git clone "$REPO" "$DOTFILES_DIR"
 fi
 
-echo "→ Installing Homebrew..."
+CONFIG_DIR="$DOTFILES_DIR/config"
+
+# Install Homebrew if missing
 if ! command -v brew &>/dev/null; then
+  echo "→ Installing Homebrew..."
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
-# Load brew into current session
+
+# Load Homebrew into current session
 if [[ -f /opt/homebrew/bin/brew ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
 elif [[ -f /usr/local/bin/brew ]]; then
   eval "$(/usr/local/bin/brew shellenv)"
 fi
 
+# Install only what .zshrc needs
 echo "→ Installing packages..."
-brew install fnm fzf direnv gh oh-my-posh
+brew install fnm fzf direnv gh jandedobbeleer/oh-my-posh/oh-my-posh
 
-echo "→ Installing Oh My Zsh..."
+# Install Oh My Zsh if missing
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+  echo "→ Installing Oh My Zsh..."
   RUNZSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 fi
 
+# Install Oh My Zsh plugins
 echo "→ Installing Oh My Zsh plugins..."
-ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
-git clone https://github.com/Aloxaf/fzf-tab "$ZSH_CUSTOM/plugins/fzf-tab" 2>/dev/null || true
-git clone https://github.com/zsh-users/zsh-autosuggestions "$ZSH_CUSTOM/plugins/zsh-autosuggestions" 2>/dev/null || true
-git clone https://github.com/zsh-users/zsh-syntax-highlighting "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" 2>/dev/null || true
+git clone https://github.com/Aloxaf/fzf-tab ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/fzf-tab 2>/dev/null || true
+git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions 2>/dev/null || true
+git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting 2>/dev/null || true
 
+# Copy dotfiles (with backup of existing files)
 echo "→ Copying dotfiles..."
-find "$DOTFILES/config" -type f \
-  ! -path "*/server/*" \
-  ! -path "*/sharedhosting/*" \
-  ! -path "*/.config/ghostty/*" | while read -r file; do
-  relative="${file#$DOTFILES/config/}"
+for file in $(find "$CONFIG_DIR" -type f \
+  -not -path "$CONFIG_DIR/server/*" \
+  -not -path "$CONFIG_DIR/sharedhosting/*" \
+  -not -path "$CONFIG_DIR/.config/ghostty/*"); do
+  relative="${file#$CONFIG_DIR/}"
   target="$HOME/$relative"
+
+  if [ -f "$target" ]; then
+    cp "$target" "$target.backup"
+  fi
   mkdir -p "$(dirname "$target")"
   cp "$file" "$target"
 done
 
-echo "→ Patching .zshrc..."
-python3 - << 'PYEOF'
-import os
-path = os.path.expanduser("~/.zshrc")
-c = open(path).read()
-prepend = ''
-if '[[ "$TERM" == "xterm-ghostty" ]]' not in c:
-    prepend += '[[ "$TERM" == "xterm-ghostty" ]] && export TERM="xterm-256color"\n'
-if '$HOME/.local/bin' not in c:
-    prepend += 'export PATH="$HOME/.local/bin:$PATH"\n'
-if prepend:
-    c = prepend + c
-open(path, 'w').write(c)
-print("  Done")
-PYEOF
+# Prepend Ghostty TERM fix to .zshrc
+if ! grep -q 'xterm-ghostty' "$HOME/.zshrc"; then
+  echo '→ Adding Ghostty TERM fix...'
+  printf '[[ "$TERM" == "xterm-ghostty" ]] && export TERM="xterm-256color"\n' | \
+    cat - "$HOME/.zshrc" > /tmp/zshrc_tmp && mv /tmp/zshrc_tmp "$HOME/.zshrc"
+fi
+
+# Make scripts executable
+if [ -d "$HOME/scripts" ]; then
+  chmod +x "$HOME/scripts/"*
+fi
+
+# Load updated zprofile so fnm is available
+source "$HOME/.zprofile" 2>/dev/null || true
+
+# Install latest Node.js via fnm
+if command -v fnm &>/dev/null; then
+  echo "→ Installing Node.js via fnm..."
+  fnm install --latest
+  fnm default "$(fnm ls | head -1 | awk '{print $2}')"
+fi
 
 echo ""
 echo "✓ Done! Run: exec zsh"
