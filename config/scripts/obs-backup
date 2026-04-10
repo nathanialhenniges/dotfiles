@@ -1,0 +1,65 @@
+#!/bin/bash
+set -euo pipefail
+
+SOURCE="$HOME/Movies/OBS"
+DEST="/Users/nathanialhenniges/Library/CloudStorage/GoogleDrive-nathanial.henniges@mrdemonwolf.com/My Drive/MultiMedia Projects/Social Media/Recording"
+LOG="$HOME/Movies/OBS/.backup.log"
+
+echo "▶ OBS backup started at $(date)" | tee -a "$LOG"
+echo "" | tee -a "$LOG"
+
+# Ensure destination subfolders exist
+mkdir -p "$DEST/Raw" "$DEST/Edits" "$DEST/Clips" "$DEST/Exports"
+
+# ── Edits, Clips, Exports — sync then auto-delete local ──────────────────
+for FOLDER in Edits Clips Exports; do
+  SRC="$SOURCE/$FOLDER/"
+  DST="$DEST/$FOLDER/"
+
+  # Skip if folder is empty
+  if [ -z "$(ls -A "$SRC" 2>/dev/null)" ]; then
+    echo "⏭  $FOLDER — empty, skipping" | tee -a "$LOG"
+    continue
+  fi
+
+  echo "▶ Syncing $FOLDER to Google Drive..." | tee -a "$LOG"
+  rsync -av --update \
+    --exclude='.DS_Store' \
+    "$SRC" "$DST" 2>&1 | tee -a "$LOG"
+
+  echo "🗑  Clearing local $FOLDER (files are on Google Drive)..." | tee -a "$LOG"
+  find "$SRC" -mindepth 1 -not -name '.DS_Store' -delete
+  echo "✅ $FOLDER synced and cleared" | tee -a "$LOG"
+  echo "" | tee -a "$LOG"
+done
+
+# ── Raw — sync then prompt before deleting ───────────────────────────────
+RAW_SRC="$SOURCE/Raw/"
+RAW_DST="$DEST/Raw/"
+
+if [ -z "$(ls -A "$RAW_SRC" 2>/dev/null)" ]; then
+  echo "⏭  Raw — empty, skipping" | tee -a "$LOG"
+else
+  echo "▶ Syncing Raw to Google Drive..." | tee -a "$LOG"
+  rsync -av --update \
+    --exclude='.DS_Store' \
+    "$RAW_SRC" "$RAW_DST" 2>&1 | tee -a "$LOG"
+
+  echo "✅ Raw synced to Google Drive" | tee -a "$LOG"
+  echo "" | tee -a "$LOG"
+
+  RAW_SIZE=$(du -sh "$RAW_SRC" 2>/dev/null | cut -f1)
+  RAW_COUNT=$(find "$RAW_SRC" -mindepth 1 -not -name '.DS_Store' | wc -l | tr -d ' ')
+  echo "Raw files on disk: $RAW_COUNT files, $RAW_SIZE" | tee -a "$LOG"
+  echo ""
+  read -r -p "Delete local Raw files? They are now on Google Drive. (y/N) " CONFIRM
+  if [[ "${CONFIRM:-}" =~ ^[Yy]$ ]]; then
+    find "$RAW_SRC" -mindepth 1 -not -name '.DS_Store' -delete
+    echo "🗑  Local Raw files cleared" | tee -a "$LOG"
+  else
+    echo "⏭  Raw files kept locally" | tee -a "$LOG"
+  fi
+fi
+
+echo "" | tee -a "$LOG"
+echo "✅ OBS backup complete at $(date)" | tee -a "$LOG"

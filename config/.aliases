@@ -15,3 +15,8 @@ alias towebm='function _towebm() { local out="${2:-${1%.*}.webm}"; ffmpeg -hwacc
 alias towebmp4='function _towebmp4() { local out="${2:-${1%.*}.mp4}"; ffmpeg -hwaccel videotoolbox -i "$1" -c:v h264_videotoolbox -q:v 65 -c:a aac -movflags +faststart "$out"; }; _towebmp4'
 
 alias yolo="claude --dangerously-skip-permissions"
+
+# ─── Video / Media Scripts ──────────────────────────────────────────────────
+alias yt-video-backup='~/scripts/yt-video-backup'
+alias new-video='~/scripts/new-video'
+alias obs-backup='~/scripts/obs-backup'
