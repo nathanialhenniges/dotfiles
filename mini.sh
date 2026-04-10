@@ -48,14 +48,18 @@ find "$DOTFILES/config" -type f \
   cp "$file" "$target"
 done
 
-echo "→ Adding Ghostty TERM fix to .zshrc..."
+echo "→ Patching .zshrc..."
 python3 - << 'PYEOF'
 import os
 path = os.path.expanduser("~/.zshrc")
 c = open(path).read()
-term_fix = '[[ "$TERM" == "xterm-ghostty" ]] && export TERM="xterm-256color"\n'
-if term_fix.strip() not in c:
-    c = term_fix + c
+prepend = ''
+if '[[ "$TERM" == "xterm-ghostty" ]]' not in c:
+    prepend += '[[ "$TERM" == "xterm-ghostty" ]] && export TERM="xterm-256color"\n'
+if '$HOME/.local/bin' not in c:
+    prepend += 'export PATH="$HOME/.local/bin:$PATH"\n'
+if prepend:
+    c = prepend + c
 open(path, 'w').write(c)
 print("  Done")
 PYEOF
