@@ -17,6 +17,6 @@ alias towebmp4='function _towebmp4() { local out="${2:-${1%.*}.mp4}"; ffmpeg -hw
 alias yolo="claude --dangerously-skip-permissions"
 
 # ─── Video / Media Scripts ──────────────────────────────────────────────────
-alias yt-video-backup='~/scripts/yt-video-backup'
-alias new-video='~/scripts/new-video'
-alias obs-backup='~/scripts/obs-backup'
+alias yt-video-backup='~/.scripts/yt-video-backup'
+alias new-video='~/.scripts/new-video'
+alias obs-backup='~/.scripts/obs-backup'
