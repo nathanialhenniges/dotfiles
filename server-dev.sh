@@ -10,6 +10,7 @@
 #   bash <(curl -fsSL .../server-dev.sh) --hostname foo        # set hostname to "foo"
 #   bash <(curl -fsSL .../server-dev.sh) --hostname random     # random wolf-themed hostname
 #   bash <(curl -fsSL .../server-dev.sh) --ai                  # also install Claude Code + Codex CLIs
+#   bash <(curl -fsSL .../server-dev.sh) --pnpm                # also install pnpm
 #
 # (When piping via process substitution, flags go after the closing paren.)
 set -e
@@ -24,16 +25,18 @@ WOLF_HOSTNAMES=(fenrir lupus luna shadow ghost timber sirius akela balto \
 # Parse flags.
 HOSTNAME_ARG=""
 INSTALL_AI=""
+INSTALL_PNPM=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --hostname)   HOSTNAME_ARG="${2:-random}"; shift; [[ $# -gt 0 ]] && shift ;;
     --hostname=*) HOSTNAME_ARG="${1#*=}"; shift ;;
     --ai)         INSTALL_AI=1; shift ;;
+    --pnpm)       INSTALL_PNPM=1; shift ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --hostname <name|random>, --ai, --help" >&2
+      echo "Try: --hostname <name|random>, --ai, --pnpm, --help" >&2
       exit 1 ;;
   esac
 done
@@ -130,15 +133,30 @@ install_fnm_node() {
   substep "Node.js $(node --version 2>/dev/null) (LTS) set as default"
 }
 
+# Echo an npm-global command: direct npm, else via fnm's default node, else empty.
+npm_global_cmd() {
+  if command -v npm &>/dev/null; then
+    echo "npm"
+  elif command -v fnm &>/dev/null; then
+    echo "fnm exec --using=default npm"
+  fi
+}
+
+install_pnpm() {
+  local npm_cmd; npm_cmd="$(npm_global_cmd)"
+  if [[ -n "$npm_cmd" ]]; then
+    log "Installing pnpm..."
+    $npm_cmd install -g pnpm
+    substep "pnpm installed globally"
+  else
+    substep "npm not found — skipping pnpm install"
+  fi
+}
+
 install_ai_clis() {
   # npm globals — need Node. install_fnm_node activates the default version, but
-  # fall back to `fnm exec` so this works even if PATH activation didn't stick.
-  local npm_cmd=""
-  if command -v npm &>/dev/null; then
-    npm_cmd="npm"
-  elif command -v fnm &>/dev/null; then
-    npm_cmd="fnm exec --using=default npm"
-  fi
+  # npm_global_cmd falls back to `fnm exec` if PATH activation didn't stick.
+  local npm_cmd; npm_cmd="$(npm_global_cmd)"
   if [[ -n "$npm_cmd" ]]; then
     log "Installing AI CLIs (Claude Code, Codex)..."
     $npm_cmd install -g @anthropic-ai/claude-code @openai/codex
@@ -332,6 +350,7 @@ install_dev_packages
 install_go
 install_bun
 install_fnm_node
+[[ -n "$INSTALL_PNPM" ]] && install_pnpm
 [[ -n "$INSTALL_AI" ]] && install_ai_clis
 install_docker
 
