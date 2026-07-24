@@ -184,18 +184,24 @@ hardening** — with one command over SSH:
 bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/server-dev.sh)
 ```
 
-Optionally set the machine's hostname while you're at it:
+Optional flags:
 
 ```bash
-# explicit name
+# explicit hostname
 bash <(curl -fsSL .../server-dev.sh) --hostname devbox
 
-# random wolf-themed name (fenrir, luna, timber, sirius, …)
+# random wolf-themed hostname (fenrir, luna, timber, sirius, …)
 bash <(curl -fsSL .../server-dev.sh) --hostname random
+
+# also install the Claude Code + Codex CLIs (npm globals)
+bash <(curl -fsSL .../server-dev.sh) --ai
 ```
 
-Without `--hostname` the hostname is left unchanged. It updates
-both `hostnamectl` and the `/etc/hosts` `127.0.1.1` line.
+`--hostname` (omit to leave it unchanged) updates both
+`hostnamectl` and the `/etc/hosts` `127.0.1.1` line. `--ai`
+installs `@anthropic-ai/claude-code` and `@openai/codex`
+globally via npm (Node is set up first, so npm is available).
+Flags combine, e.g. `--hostname random --ai`.
 
 **Prerequisite:** create the sudo account and add your SSH public
 key to its `~/.ssh/authorized_keys` **first**, then run this as
@@ -234,6 +240,21 @@ disconnect the first one.**
 
 Linux only (exits early on macOS — use `install.sh` there).
 Safe to re-run; hardening is idempotent.
+
+### After it runs
+
+The script prints these next steps when it finishes:
+
+1. **Open a second SSH session now** to confirm key login still
+   works before you disconnect the first — `sshd` was just
+   restarted.
+2. **Reconnect** (or run `zsh`) to start using zsh + fnm.
+3. **Log out and back in** for Docker group membership to apply
+   (then `docker run hello-world` should work without `sudo`).
+4. **`gh auth login`** to authenticate the GitHub CLI (see the
+   single-org scoping note below).
+5. **Forward dev ports** from your laptop with `ssh -L` (see
+   below).
 
 ### Reaching dev ports over SSH
 
