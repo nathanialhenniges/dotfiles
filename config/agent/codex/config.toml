@@ -1,0 +1,20 @@
+# Linux dev-server Codex config (curated by server-dev.sh --agent-setup).
+# The macOS desktop config has ChatGPT.app-bundled MCP servers, local
+# marketplaces, computer-use, and machine-specific project trust/hooks — none of
+# that transplants to a headless Linux box, so this keeps only the portable bits.
+# Codex plugins (@personal marketplace) are macOS-app-local; re-add them manually
+# if you want them here.
+
+model = "gpt-5.6-sol"
+model_reasoning_effort = "medium"
+service_tier = "default"
+
+[features]
+js_repl = false
+
+# Atlassian (Jira + Confluence) remote MCP, bridged to stdio via mcp-remote.
+# First use opens a browser OAuth login — see docs/jira-mcp-setup.md.
+[mcp_servers.atlassian]
+command = "npx"
+args = ["-y", "mcp-remote", "https://mcp.atlassian.com/v1/mcp"]
+startup_timeout_sec = 120

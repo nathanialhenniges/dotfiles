@@ -1,0 +1,77 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__pencil",
+      "Bash(git:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm check-types:*)",
+      "Bash(pnpm db:push:*)",
+      "Bash(pnpm next typegen:*)",
+      "Bash(pnpm --filter web build:*)",
+      "Bash(pnpm --filter fumadocs build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx turbo:*)",
+      "Bash(npx next build)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx fumadocs-mdx:*)",
+      "Bash(gh repo edit:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:railpack.com)"
+    ],
+    "defaultMode": "default"
+  },
+  "model": "opusplan",
+  "effortLevel": "medium",
+  "enabledPlugins": {
+    "atlassian@claude-plugins-official": true,
+    "caveman@caveman": true,
+    "claude-wordpress-skills@claude-wordpress-skills": true,
+    "coderabbit@claude-plugins-official": true,
+    "context-mode@context-mode": true,
+    "expo-deployment@expo-plugins": true,
+    "frontend-design@claude-plugins-official": true,
+    "swift-lsp@claude-plugins-official": true,
+    "upgrading-expo@expo-plugins": true,
+    "ponytail@ponytail": true
+  },
+  "extraKnownMarketplaces": {
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    },
+    "cc-discord-presence": {
+      "source": {
+        "source": "github",
+        "repo": "tsanva/cc-discord-presence"
+      }
+    },
+    "context-mode": {
+      "source": {
+        "source": "github",
+        "repo": "mksglu/context-mode"
+      }
+    },
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      }
+    }
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "skipWorkflowUsageWarning": true,
+  "remoteControlAtStartup": true,
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true,
+  "releaseChannel": "stable",
+  "tui": "fullscreen"
+}

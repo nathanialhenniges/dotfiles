@@ -11,6 +11,7 @@
 #   bash <(curl -fsSL .../server-dev.sh) --hostname random     # random wolf-themed hostname
 #   bash <(curl -fsSL .../server-dev.sh) --ai                  # also install Claude Code + Codex CLIs
 #   bash <(curl -fsSL .../server-dev.sh) --pnpm                # also install pnpm
+#   bash <(curl -fsSL .../server-dev.sh) --agent-setup         # +CLIs, plugins, skills, settings, Jira MCP
 #
 # (When piping via process substitution, flags go after the closing paren.)
 set -e
@@ -26,17 +27,19 @@ WOLF_HOSTNAMES=(fenrir lupus luna shadow ghost timber sirius akela balto \
 HOSTNAME_ARG=""
 INSTALL_AI=""
 INSTALL_PNPM=""
+AGENT_SETUP=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --hostname)   HOSTNAME_ARG="${2:-random}"; shift; [[ $# -gt 0 ]] && shift ;;
-    --hostname=*) HOSTNAME_ARG="${1#*=}"; shift ;;
-    --ai)         INSTALL_AI=1; shift ;;
-    --pnpm)       INSTALL_PNPM=1; shift ;;
+    --hostname)    HOSTNAME_ARG="${2:-random}"; shift; [[ $# -gt 0 ]] && shift ;;
+    --hostname=*)  HOSTNAME_ARG="${1#*=}"; shift ;;
+    --ai)          INSTALL_AI=1; shift ;;
+    --pnpm)        INSTALL_PNPM=1; shift ;;
+    --agent-setup) AGENT_SETUP=1; shift ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --hostname <name|random>, --ai, --pnpm, --help" >&2
+      echo "Try: --hostname <name|random>, --ai, --pnpm, --agent-setup, --help" >&2
       exit 1 ;;
   esac
 done
@@ -173,6 +176,72 @@ install_docker() {
     sudo usermod -aG docker "$USER"
     substep "Added $USER to the docker group (log out/in to take effect)"
   fi
+}
+
+# GitHub-shorthand marketplaces and the plugins to enable from them.
+CLAUDE_MARKETPLACES=(
+  anthropics/claude-plugins-official
+  JuliusBrussee/caveman
+  DietrichGebert/ponytail
+  mksglu/context-mode
+  elvismdev/claude-wordpress-skills
+  expo/skills
+  tsanva/cc-discord-presence
+)
+CLAUDE_PLUGINS=(
+  atlassian@claude-plugins-official
+  coderabbit@claude-plugins-official
+  frontend-design@claude-plugins-official
+  swift-lsp@claude-plugins-official
+  caveman@caveman
+  ponytail@ponytail
+  context-mode@context-mode
+  claude-wordpress-skills@claude-wordpress-skills
+  expo-deployment@expo-plugins
+  upgrading-expo@expo-plugins
+)
+
+agent_setup() {
+  # Needs the Claude Code CLI — install the AI CLIs if they're not here yet.
+  command -v claude &>/dev/null || install_ai_clis
+  local agent_dir="$DOTFILES_DIR/config/agent"
+
+  # Curated Claude Code settings (model, permissions, plugins) — no machine-
+  # specific hooks/statusline paths. Written first so plugins load declaratively.
+  log "Installing Claude Code settings + skills..."
+  mkdir -p "$HOME/.claude/skills"
+  [[ -f "$HOME/.claude/settings.json" ]] && cp "$HOME/.claude/settings.json" "$HOME/.claude/settings.json.backup"
+  cp "$agent_dir/claude/settings.json" "$HOME/.claude/settings.json"
+  cp -R "$agent_dir/claude/skills/." "$HOME/.claude/skills/"
+  substep "settings.json + $(ls -1 "$agent_dir/claude/skills" | wc -l | tr -d ' ') skills installed"
+
+  # Plugins — add each marketplace, then install each plugin (idempotent).
+  if command -v claude &>/dev/null; then
+    log "Adding Claude Code plugin marketplaces..."
+    local m p
+    for m in "${CLAUDE_MARKETPLACES[@]}"; do
+      claude plugin marketplace add "$m" &>/dev/null || substep "marketplace $m (already added or unavailable)"
+    done
+    log "Installing Claude Code plugins..."
+    for p in "${CLAUDE_PLUGINS[@]}"; do
+      claude plugin install "$p" &>/dev/null || substep "plugin $p (already installed or unavailable)"
+    done
+    # Pre-register the Atlassian (Jira) MCP — OAuth login is manual, see docs.
+    claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp &>/dev/null \
+      || substep "atlassian MCP (already added or unavailable)"
+  else
+    substep "claude CLI missing — skipped plugins + Jira MCP"
+  fi
+
+  # Codex: Linux-safe config.toml (drops macOS-only servers). Plugins are
+  # macOS-app-local and must be re-added manually.
+  log "Installing Codex config..."
+  mkdir -p "$HOME/.codex"
+  [[ -f "$HOME/.codex/config.toml" ]] && cp "$HOME/.codex/config.toml" "$HOME/.codex/config.toml.backup"
+  cp "$agent_dir/codex/config.toml" "$HOME/.codex/config.toml"
+
+  substep "Agent setup done. Jira/Atlassian needs a one-time OAuth login —"
+  substep "  see $DOTFILES_DIR/docs/jira-mcp-setup.md (claude: /mcp; codex: first run)."
 }
 
 # ── Semi-lockdown hardening (always runs) ────────────────────────────────────
@@ -352,6 +421,7 @@ install_bun
 install_fnm_node
 [[ -n "$INSTALL_PNPM" ]] && install_pnpm
 [[ -n "$INSTALL_AI" ]] && install_ai_clis
+[[ -n "$AGENT_SETUP" ]] && agent_setup
 install_docker
 
 # Semi-lockdown hardening
