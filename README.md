@@ -198,6 +198,9 @@ bash <(curl -fsSL .../server-dev.sh) --ai
 
 # also install pnpm
 bash <(curl -fsSL .../server-dev.sh) --pnpm
+
+# full agent setup: CLIs + plugins + skills + settings + Jira MCP
+bash <(curl -fsSL .../server-dev.sh) --agent-setup
 ```
 
 `--hostname` (omit to leave it unchanged) updates both
@@ -206,6 +209,31 @@ installs `@anthropic-ai/claude-code` and `@openai/codex`
 globally via npm; `--pnpm` installs pnpm (both run after Node is
 set up, so npm is available). Flags combine, e.g.
 `--hostname random --ai --pnpm`.
+
+### Agent setup (`--agent-setup`)
+
+Replicates the Claude Code + Codex setup on the box (implies
+`--ai`). It:
+
+- Installs the Claude Code + Codex CLIs (if not already).
+- Writes a curated `~/.claude/settings.json` (model, permission
+  allowlist, enabled plugins) — without the machine-specific
+  hooks/statusline paths from the desktop config.
+- Copies the skills pack into `~/.claude/skills/`.
+- Adds the plugin marketplaces and installs the plugins
+  (`claude plugin marketplace add` / `install`).
+- Writes a Linux-safe `~/.codex/config.toml` (model + reasoning;
+  drops the macOS-only MCP servers). Codex plugins are
+  macOS-app-local — re-add them manually if wanted.
+- Pre-registers the Atlassian (Jira/Confluence) MCP for both
+  Claude Code and Codex.
+
+Existing `settings.json` / `config.toml` are backed up to
+`*.backup` first.
+
+**Jira/Atlassian needs a one-time OAuth login** — it can't be
+provisioned headlessly. See
+[docs/jira-mcp-setup.md](docs/jira-mcp-setup.md).
 
 **Prerequisite:** create the sudo account and add your SSH public
 key to its `~/.ssh/authorized_keys` **first**, then run this as
