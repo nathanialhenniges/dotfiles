@@ -54,6 +54,8 @@ bindkey "^[[A" history-search-backward
 bindkey "^[[B" history-search-forward
 
 # ── fnm (Fast Node Manager) — active only if installed ─────
+# Linux installer drops fnm in ~/.local/share/fnm (not on PATH by default).
+[[ -d "$HOME/.local/share/fnm" ]] && export PATH="$HOME/.local/share/fnm:$PATH"
 command -v fnm &>/dev/null && eval "$(fnm env --use-on-cd --shell zsh)"
 
 # ── Secrets (API tokens, etc.) ─────────────────────────────
