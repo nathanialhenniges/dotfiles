@@ -55,6 +55,12 @@ source "$DOTFILES_DIR/lib/bootstrap.sh"
 
 # ── Dev additions (Linux only) ───────────────────────────────────────────────
 
+create_home_dirs() {
+  log "Creating home directories..."
+  mkdir -p "$HOME/Developer" "$HOME/Downloads"
+  substep "~/Developer, ~/Downloads ready"
+}
+
 set_hostname() {
   local name="$1"
   if [[ "$name" == "random" ]]; then
@@ -300,6 +306,9 @@ fi
 
 # Hostname first, so the new name shows up everywhere downstream.
 [[ -n "$HOSTNAME_ARG" ]] && set_hostname "$HOSTNAME_ARG"
+
+# Home directory layout
+create_home_dirs
 
 # Base environment (shared with server.sh)
 install_base_packages
