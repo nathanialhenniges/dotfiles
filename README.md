@@ -116,6 +116,12 @@ cd ~/Developer/nathanialhenniges/dotfiles
   Node.js via fnm.
 - `./server.sh` — Bootstrap a remote Linux server with zsh,
   Oh My Zsh, and minimal server configs from `config/server/`.
+- `./server-dev.sh` — Bootstrap a remote Linux **dev** server:
+  everything `server.sh` does, plus fnm + Node, Docker, and dev
+  CLIs (gh, direnv, bun, go, build-essential, jq, eza, btop).
+- `lib/bootstrap.sh` — Shared helper functions sourced by
+  `server.sh` and `server-dev.sh` (base packages, Oh My Zsh,
+  plugins, Oh My Posh, config copy, shell switch).
 - `./sharedhosting.sh` — Bootstrap a shared hosting environment
   (no root required, bash-based) with configs from `config/sharedhosting/`.
 
@@ -143,10 +149,13 @@ dotfiles/
 │       │   └── config                # Ghostty terminal config (Liquid Glass)
 │       └── ohmyposh/
 │           └── mrdemonwolf.omp.json  # Oh My Posh theme
+├── lib/
+│   └── bootstrap.sh           # Shared server bootstrap helpers
 ├── Brewfile                   # Homebrew packages and casks
 ├── sync.sh                    # System -> repo sync script
 ├── install.sh                 # Repo -> system install script
 ├── server.sh                  # Remote server bootstrap script
+├── server-dev.sh              # Remote Linux dev-server bootstrap
 ├── sharedhosting.sh           # Shared hosting bootstrap (no root)
 ├── .gitignore
 └── README.md
@@ -164,6 +173,119 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/m
 This installs zsh, Oh My Zsh + plugins, and copies a minimal
 shell config from `config/server/` — no macOS tooling, no
 Homebrew, no Node.js. Safe to re-run to pull updated configs.
+
+## Dev Server Setup
+
+Bootstrap a remote **Linux dev server** — everything `server.sh`
+sets up, plus a full development toolchain **and semi-lockdown
+hardening** — with one command over SSH:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/server-dev.sh)
+```
+
+Optionally set the machine's hostname while you're at it:
+
+```bash
+# explicit name
+bash <(curl -fsSL .../server-dev.sh) --hostname devbox
+
+# random wolf-themed name (fenrir, luna, timber, sirius, …)
+bash <(curl -fsSL .../server-dev.sh) --hostname random
+```
+
+Without `--hostname` the hostname is left unchanged. It updates
+both `hostnamectl` and the `/etc/hosts` `127.0.1.1` line.
+
+**Prerequisite:** create the sudo account and add your SSH public
+key to its `~/.ssh/authorized_keys` **first**, then run this as
+that account. The script hardens the box — it does not create the
+user.
+
+On top of the base zsh environment, this installs:
+
+- **fnm + latest Node.js** — with `--use-on-cd` auto-switching
+- **Docker** — via the official `get.docker.com` script; your
+  user is added to the `docker` group (log out/in to apply)
+- **Dev CLIs** — `gh`, `direnv`, `bun`, `go`, `build-essential`,
+  `jq`, `eza`, `btop`
+
+And it applies **base hardening** (ported from the
+[server-setup](https://github.com/MrDemonWolf/server-setup)
+Ansible roles):
+
+- **Key-only SSH** — hardened `sshd` drop-in: `PermitRootLogin
+  prohibit-password`, `PasswordAuthentication no`, `MaxAuthTries
+  3`, keep-alives. Validated with `sshd -t` before restart.
+- **UFW firewall** — default-deny inbound, **SSH (22) only**
+  open. Reach dev app ports via SSH forwarding (below).
+- **sysctl** — anti-spoof, SYN-flood, and ICMP-redirect
+  protections.
+- **fail2ban** — bans SSH brute-force (default `sshd` jail).
+- **Unattended security upgrades** — hands-free patching, no
+  auto-reboot.
+
+**Lockout guard:** `PasswordAuthentication no` is only applied
+when the running user already has `~/.ssh/authorized_keys`. No
+key → password auth is left on and you get a warning, so a
+keyless box never becomes unreachable. After it runs, **open a
+second SSH session to confirm key login works before you
+disconnect the first one.**
+
+Linux only (exits early on macOS — use `install.sh` there).
+Safe to re-run; hardening is idempotent.
+
+### Reaching dev ports over SSH
+
+Because UFW opens **only** SSH, you reach a dev server's app
+ports (Vite, Node, etc.) by tunnelling them over your existing
+SSH connection — no inbound firewall holes needed.
+
+Ad-hoc, per session:
+
+```bash
+ssh -L 3000:localhost:3000 -L 5173:localhost:5173 user@devbox
+```
+
+Now `http://localhost:3000` on your laptop hits the server's
+port 3000.
+
+Persistent — add this to `~/.ssh/config` **on your laptop** (not
+the server) so a bare `ssh devbox` opens the forwards every time:
+
+```
+Host devbox
+    HostName <server-ip>
+    User <your-user>
+    LocalForward 3000 localhost:3000
+    LocalForward 5173 localhost:5173
+```
+
+Add one `LocalForward <local-port> localhost:<remote-port>` line
+per port you use.
+
+### Scoped GitHub CLI login (single org)
+
+The script installs the GitHub CLI but does **not** log you in —
+`gh auth login` is interactive and token-scoped, so it stays a
+manual step.
+
+A standard `gh auth login` authenticates your **account**, which
+means gh can see every organization you belong to. Scope lives on
+the **token**, not the org. To restrict gh to just one org:
+
+1. Create a **fine-grained personal access token**: GitHub →
+   **Settings → Developer settings → Fine-grained tokens**.
+2. Set **Resource owner** to that org and select only its repos
+   (plus whatever repository permissions you need).
+3. Log in with the token instead of the browser flow:
+
+```bash
+gh auth login --with-token < token.txt
+```
+
+That token physically cannot touch any other org, so gh is
+effectively locked to the one you scoped it to.
 
 ## Shared Hosting Setup
 
