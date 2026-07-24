@@ -23,7 +23,7 @@ install_base_packages() {
     fi
     brew install zsh git curl wget fzf
   else
-    sudo apt update && sudo apt install -y zsh git curl wget fzf
+    sudo apt update && sudo apt install -y zsh git curl wget fzf unzip
   fi
 }
 
