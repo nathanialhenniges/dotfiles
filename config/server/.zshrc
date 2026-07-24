@@ -53,5 +53,8 @@ zstyle ':fzf-tab:*' fzf-flags --bind=tab:accept
 bindkey "^[[A" history-search-backward
 bindkey "^[[B" history-search-forward
 
+# ── fnm (Fast Node Manager) — active only if installed ─────
+command -v fnm &>/dev/null && eval "$(fnm env --use-on-cd --shell zsh)"
+
 # ── Secrets (API tokens, etc.) ─────────────────────────────
 [[ -f ~/.secrets ]] && source ~/.secrets
