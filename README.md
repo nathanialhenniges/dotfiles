@@ -201,6 +201,9 @@ bash <(curl -fsSL .../server-dev.sh) --pnpm
 
 # full agent setup: CLIs + plugins + skills + settings + Jira MCP
 bash <(curl -fsSL .../server-dev.sh) --agent-setup
+
+# headless Chrome/Chromium for browser automation + screenshots
+bash <(curl -fsSL .../server-dev.sh) --chrome
 ```
 
 `--hostname` (omit to leave it unchanged) updates both
@@ -234,6 +237,30 @@ Existing `settings.json` / `config.toml` are backed up to
 **Jira/Atlassian needs a one-time OAuth login** — it can't be
 provisioned headlessly. See
 [docs/jira-mcp-setup.md](docs/jira-mcp-setup.md).
+
+### Headless browser (`--chrome`)
+
+Installs a headless-capable browser so automation tools can drive
+it and take screenshots — Google Chrome on `amd64`, Chromium on
+other arches, plus rendering fonts.
+
+Quick smoke test:
+
+```bash
+google-chrome-stable --headless=new --screenshot=/tmp/shot.png \
+  --window-size=1280,800 https://example.com && ls -la /tmp/shot.png
+```
+
+To let Claude Code / Codex *drive* the browser (click, read,
+screenshot), add a browser MCP that targets the system Chrome,
+e.g.:
+
+```bash
+claude mcp add chrome-devtools -- npx chrome-devtools-mcp@latest
+```
+
+Puppeteer/Playwright scripts can point at the installed binary
+(`google-chrome-stable`) instead of downloading their own.
 
 **Prerequisite:** create the sudo account and add your SSH public
 key to its `~/.ssh/authorized_keys` **first**, then run this as
