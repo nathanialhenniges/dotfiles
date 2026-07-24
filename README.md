@@ -216,6 +216,9 @@ On top of the base zsh environment, this installs:
 - **Dev CLIs** — `gh`, `direnv`, `bun`, `go`, `build-essential`,
   `jq`, `eza`, `btop`
 
+It also creates a basic home layout (`~/Developer`,
+`~/Downloads`; skipped if they exist).
+
 And it applies **base hardening** (ported from the
 [server-setup](https://github.com/MrDemonWolf/server-setup)
 Ansible roles):
