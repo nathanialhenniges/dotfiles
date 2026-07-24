@@ -12,6 +12,7 @@
 #   bash <(curl -fsSL .../server-dev.sh) --ai                  # also install Claude Code + Codex CLIs
 #   bash <(curl -fsSL .../server-dev.sh) --pnpm                # also install pnpm
 #   bash <(curl -fsSL .../server-dev.sh) --agent-setup         # +CLIs, plugins, skills, settings, Jira MCP
+#   bash <(curl -fsSL .../server-dev.sh) --chrome              # headless Chrome/Chromium for browser automation
 #
 # (When piping via process substitution, flags go after the closing paren.)
 set -e
@@ -28,6 +29,7 @@ HOSTNAME_ARG=""
 INSTALL_AI=""
 INSTALL_PNPM=""
 AGENT_SETUP=""
+INSTALL_CHROME=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --hostname)    HOSTNAME_ARG="${2:-random}"; shift; [[ $# -gt 0 ]] && shift ;;
@@ -35,11 +37,12 @@ while [[ $# -gt 0 ]]; do
     --ai)          INSTALL_AI=1; shift ;;
     --pnpm)        INSTALL_PNPM=1; shift ;;
     --agent-setup) AGENT_SETUP=1; shift ;;
+    --chrome)      INSTALL_CHROME=1; shift ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --hostname <name|random>, --ai, --pnpm, --agent-setup, --help" >&2
+      echo "Try: --hostname <name|random>, --ai, --pnpm, --agent-setup, --chrome, --help" >&2
       exit 1 ;;
   esac
 done
@@ -200,6 +203,35 @@ CLAUDE_PLUGINS=(
   expo-deployment@expo-plugins
   upgrading-expo@expo-plugins
 )
+
+install_chrome() {
+  # Headless browser for automation/screenshots (Playwright, Puppeteer,
+  # chrome-devtools-mcp, etc.). Google Chrome is amd64-only on Linux; fall back
+  # to Chromium on other arches.
+  if command -v google-chrome-stable &>/dev/null \
+    || command -v chromium &>/dev/null || command -v chromium-browser &>/dev/null; then
+    substep "Chrome/Chromium already installed"
+    return
+  fi
+  local arch; arch="$(dpkg --print-architecture)"
+  if [[ "$arch" == "amd64" ]]; then
+    log "Installing Google Chrome (headless)..."
+    sudo apt install -y gnupg
+    sudo mkdir -p -m 755 /etc/apt/keyrings
+    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+      | sudo gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
+      | sudo tee /etc/apt/sources.list.d/google-chrome.list >/dev/null
+    sudo apt update
+    sudo apt install -y google-chrome-stable fonts-liberation
+    substep "google-chrome-stable installed ($(google-chrome-stable --version 2>/dev/null))"
+  else
+    log "Installing Chromium (headless, $arch)..."
+    sudo apt install -y chromium fonts-liberation 2>/dev/null \
+      || sudo apt install -y chromium-browser fonts-liberation
+    substep "chromium installed"
+  fi
+}
 
 agent_setup() {
   # Needs the Claude Code CLI — install the AI CLIs if they're not here yet.
@@ -422,6 +454,7 @@ install_fnm_node
 [[ -n "$INSTALL_PNPM" ]] && install_pnpm
 [[ -n "$INSTALL_AI" ]] && install_ai_clis
 [[ -n "$AGENT_SETUP" ]] && agent_setup
+[[ -n "$INSTALL_CHROME" ]] && install_chrome
 install_docker
 
 # Semi-lockdown hardening
