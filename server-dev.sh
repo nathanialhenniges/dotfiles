@@ -9,6 +9,7 @@
 #   bash <(curl -fsSL .../server-dev.sh)                       # no hostname change
 #   bash <(curl -fsSL .../server-dev.sh) --hostname foo        # set hostname to "foo"
 #   bash <(curl -fsSL .../server-dev.sh) --hostname random     # random wolf-themed hostname
+#   bash <(curl -fsSL .../server-dev.sh) --ai                  # also install Claude Code + Codex CLIs
 #
 # (When piping via process substitution, flags go after the closing paren.)
 set -e
@@ -22,15 +23,17 @@ WOLF_HOSTNAMES=(fenrir lupus luna shadow ghost timber sirius akela balto \
 
 # Parse flags.
 HOSTNAME_ARG=""
+INSTALL_AI=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --hostname)   HOSTNAME_ARG="${2:-random}"; shift; [[ $# -gt 0 ]] && shift ;;
     --hostname=*) HOSTNAME_ARG="${1#*=}"; shift ;;
+    --ai)         INSTALL_AI=1; shift ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --hostname <name|random>, --help" >&2
+      echo "Try: --hostname <name|random>, --ai, --help" >&2
       exit 1 ;;
   esac
 done
@@ -115,6 +118,17 @@ install_fnm_node() {
     fnm install --latest
     fnm default "$(fnm ls | head -1 | awk '{print $2}')"
     substep "Node.js $(fnm exec --using=default node --version 2>/dev/null) set as default"
+  fi
+}
+
+install_ai_clis() {
+  # npm globals — need Node, so call after install_fnm_node.
+  if command -v npm &>/dev/null; then
+    log "Installing AI CLIs (Claude Code, Codex)..."
+    npm install -g @anthropic-ai/claude-code @openai/codex
+    substep "claude-code + codex installed globally"
+  else
+    substep "npm not found — skipping Claude Code / Codex install"
   fi
 }
 
@@ -299,6 +313,7 @@ install_dev_packages
 install_go
 install_bun
 install_fnm_node
+[[ -n "$INSTALL_AI" ]] && install_ai_clis
 install_docker
 
 # Semi-lockdown hardening
