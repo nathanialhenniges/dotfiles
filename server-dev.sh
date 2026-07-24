@@ -120,13 +120,14 @@ install_fnm_node() {
   export PATH="$HOME/.local/share/fnm:$PATH"
   command -v fnm &>/dev/null || { substep "fnm not found — skipping Node"; return; }
 
-  log "Installing latest Node.js via fnm..."
-  fnm install --latest
+  log "Installing latest LTS Node.js via fnm..."
+  fnm install --lts
   # Set the default BEFORE activating, so `fnm env` picks it up in this shell.
-  fnm default "$(fnm ls | head -1 | awk '{print $2}')"
+  # `lts-latest` is the alias fnm creates for the newest LTS it installed.
+  fnm default lts-latest
   eval "$(fnm env)"
   fnm use default &>/dev/null || true
-  substep "Node.js $(node --version 2>/dev/null) set as default"
+  substep "Node.js $(node --version 2>/dev/null) (LTS) set as default"
 }
 
 install_ai_clis() {
