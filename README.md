@@ -226,10 +226,15 @@ Replicates the Claude Code + Codex setup on the box (implies
 - Adds the plugin marketplaces and installs the plugins
   (`claude plugin marketplace add` / `install`).
 - Writes a Linux-safe `~/.codex/config.toml` (model + reasoning;
-  drops the macOS-only MCP servers). Codex plugins are
-  macOS-app-local — re-add them manually if wanted.
+  drops the macOS-only MCP servers).
+- Installs the **same plugins into Codex** — adds the same GitHub
+  marketplaces and installs the plugin set via `codex plugin
+  marketplace add` / `codex plugin add`.
 - Pre-registers the Atlassian (Jira/Confluence) MCP for both
   Claude Code and Codex.
+
+`--ai` (and therefore `--agent-setup`) also installs
+`bubblewrap`, which Codex needs for its Linux sandbox.
 
 Existing `settings.json` / `config.toml` are backed up to
 `*.backup` first.
