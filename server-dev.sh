@@ -118,20 +118,29 @@ install_fnm_node() {
     curl -fsSL https://fnm.vercel.app/install | bash
   fi
   export PATH="$HOME/.local/share/fnm:$PATH"
-  if command -v fnm &>/dev/null; then
-    log "Installing latest Node.js via fnm..."
-    eval "$(fnm env)"
-    fnm install --latest
-    fnm default "$(fnm ls | head -1 | awk '{print $2}')"
-    substep "Node.js $(fnm exec --using=default node --version 2>/dev/null) set as default"
-  fi
+  command -v fnm &>/dev/null || { substep "fnm not found — skipping Node"; return; }
+
+  log "Installing latest Node.js via fnm..."
+  fnm install --latest
+  # Set the default BEFORE activating, so `fnm env` picks it up in this shell.
+  fnm default "$(fnm ls | head -1 | awk '{print $2}')"
+  eval "$(fnm env)"
+  fnm use default &>/dev/null || true
+  substep "Node.js $(node --version 2>/dev/null) set as default"
 }
 
 install_ai_clis() {
-  # npm globals — need Node, so call after install_fnm_node.
+  # npm globals — need Node. install_fnm_node activates the default version, but
+  # fall back to `fnm exec` so this works even if PATH activation didn't stick.
+  local npm_cmd=""
   if command -v npm &>/dev/null; then
+    npm_cmd="npm"
+  elif command -v fnm &>/dev/null; then
+    npm_cmd="fnm exec --using=default npm"
+  fi
+  if [[ -n "$npm_cmd" ]]; then
     log "Installing AI CLIs (Claude Code, Codex)..."
-    npm install -g @anthropic-ai/claude-code @openai/codex
+    $npm_cmd install -g @anthropic-ai/claude-code @openai/codex
     substep "claude-code + codex installed globally"
   else
     substep "npm not found — skipping Claude Code / Codex install"
