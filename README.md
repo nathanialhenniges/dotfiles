@@ -195,13 +195,17 @@ bash <(curl -fsSL .../server-dev.sh) --hostname random
 
 # also install the Claude Code + Codex CLIs (npm globals)
 bash <(curl -fsSL .../server-dev.sh) --ai
+
+# also install pnpm
+bash <(curl -fsSL .../server-dev.sh) --pnpm
 ```
 
 `--hostname` (omit to leave it unchanged) updates both
 `hostnamectl` and the `/etc/hosts` `127.0.1.1` line. `--ai`
 installs `@anthropic-ai/claude-code` and `@openai/codex`
-globally via npm (Node is set up first, so npm is available).
-Flags combine, e.g. `--hostname random --ai`.
+globally via npm; `--pnpm` installs pnpm (both run after Node is
+set up, so npm is available). Flags combine, e.g.
+`--hostname random --ai --pnpm`.
 
 **Prerequisite:** create the sudo account and add your SSH public
 key to its `~/.ssh/authorized_keys` **first**, then run this as
