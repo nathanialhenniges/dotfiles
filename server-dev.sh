@@ -165,8 +165,10 @@ install_ai_clis() {
   local npm_cmd; npm_cmd="$(npm_global_cmd)"
   if [[ -n "$npm_cmd" ]]; then
     log "Installing AI CLIs (Claude Code, Codex)..."
+    # Codex uses bubblewrap (bwrap) for its Linux sandbox.
+    sudo apt install -y bubblewrap
     $npm_cmd install -g @anthropic-ai/claude-code @openai/codex
-    substep "claude-code + codex installed globally"
+    substep "claude-code + codex installed globally (+ bubblewrap sandbox)"
   else
     substep "npm not found — skipping Claude Code / Codex install"
   fi
@@ -181,8 +183,10 @@ install_docker() {
   fi
 }
 
-# GitHub-shorthand marketplaces and the plugins to enable from them.
-CLAUDE_MARKETPLACES=(
+# GitHub-shorthand marketplaces + plugins, shared by both Claude Code and Codex
+# (both take `plugin marketplace add owner/repo` and `plugin (install|add)
+# name@marketplace`, so the same set installs into each).
+AGENT_MARKETPLACES=(
   anthropics/claude-plugins-official
   JuliusBrussee/caveman
   DietrichGebert/ponytail
@@ -191,7 +195,7 @@ CLAUDE_MARKETPLACES=(
   expo/skills
   tsanva/cc-discord-presence
 )
-CLAUDE_PLUGINS=(
+AGENT_PLUGINS=(
   atlassian@claude-plugins-official
   coderabbit@claude-plugins-official
   frontend-design@claude-plugins-official
@@ -247,16 +251,16 @@ agent_setup() {
   cp -R "$agent_dir/claude/skills/." "$HOME/.claude/skills/"
   substep "settings.json + $(ls -1 "$agent_dir/claude/skills" | wc -l | tr -d ' ') skills installed"
 
-  # Plugins — add each marketplace, then install each plugin (idempotent).
+  local m p
+  # Claude Code plugins — add each marketplace, then install each plugin.
   if command -v claude &>/dev/null; then
     log "Adding Claude Code plugin marketplaces..."
-    local m p
-    for m in "${CLAUDE_MARKETPLACES[@]}"; do
-      claude plugin marketplace add "$m" &>/dev/null || substep "marketplace $m (already added or unavailable)"
+    for m in "${AGENT_MARKETPLACES[@]}"; do
+      claude plugin marketplace add "$m" &>/dev/null || substep "claude marketplace $m (already added or unavailable)"
     done
     log "Installing Claude Code plugins..."
-    for p in "${CLAUDE_PLUGINS[@]}"; do
-      claude plugin install "$p" &>/dev/null || substep "plugin $p (already installed or unavailable)"
+    for p in "${AGENT_PLUGINS[@]}"; do
+      claude plugin install "$p" &>/dev/null || substep "claude plugin $p (already installed or unavailable)"
     done
     # Pre-register the Atlassian (Jira) MCP — OAuth login is manual, see docs.
     claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp &>/dev/null \
@@ -265,12 +269,26 @@ agent_setup() {
     substep "claude CLI missing — skipped plugins + Jira MCP"
   fi
 
-  # Codex: Linux-safe config.toml (drops macOS-only servers). Plugins are
-  # macOS-app-local and must be re-added manually.
+  # Codex: Linux-safe config.toml (drops macOS-only servers).
   log "Installing Codex config..."
   mkdir -p "$HOME/.codex"
   [[ -f "$HOME/.codex/config.toml" ]] && cp "$HOME/.codex/config.toml" "$HOME/.codex/config.toml.backup"
   cp "$agent_dir/codex/config.toml" "$HOME/.codex/config.toml"
+
+  # Codex plugins — same Git marketplaces + plugin set as Claude (Codex takes
+  # `plugin marketplace add owner/repo` and `plugin add name@marketplace`).
+  if command -v codex &>/dev/null; then
+    log "Adding Codex plugin marketplaces (same as Claude)..."
+    for m in "${AGENT_MARKETPLACES[@]}"; do
+      codex plugin marketplace add "$m" &>/dev/null || substep "codex marketplace $m (already added or unavailable)"
+    done
+    log "Installing Codex plugins..."
+    for p in "${AGENT_PLUGINS[@]}"; do
+      codex plugin add "$p" &>/dev/null || substep "codex plugin $p (unavailable — install manually)"
+    done
+  else
+    substep "codex CLI missing — skipped codex plugins"
+  fi
 
   substep "Agent setup done. Jira/Atlassian needs a one-time OAuth login —"
   substep "  see $DOTFILES_DIR/docs/jira-mcp-setup.md (claude: /mcp; codex: first run)."

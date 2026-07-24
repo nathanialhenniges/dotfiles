@@ -2,8 +2,8 @@
 # The macOS desktop config has ChatGPT.app-bundled MCP servers, local
 # marketplaces, computer-use, and machine-specific project trust/hooks — none of
 # that transplants to a headless Linux box, so this keeps only the portable bits.
-# Codex plugins (@personal marketplace) are macOS-app-local; re-add them manually
-# if you want them here.
+# The same GitHub plugin marketplaces as Claude Code are added by --agent-setup
+# via `codex plugin marketplace add` (config written here on install).
 
 model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
