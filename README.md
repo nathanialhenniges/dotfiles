@@ -122,6 +122,9 @@ cd ~/Developer/nathanialhenniges/dotfiles
 - `lib/bootstrap.sh` — Shared helper functions sourced by
   `server.sh` and `server-dev.sh` (base packages, Oh My Zsh,
   plugins, Oh My Posh, config copy, shell switch).
+- `./mini.sh` — Minimal bootstrap: Homebrew plus a small package
+  set (fnm, fzf, direnv, gh, Oh My Posh), Oh My Zsh + plugins,
+  and dotfiles excluding the server/sharedhosting/ghostty configs.
 - `./sharedhosting.sh` — Bootstrap a shared hosting environment
   (no root required, bash-based) with configs from `config/sharedhosting/`.
 
@@ -144,6 +147,13 @@ dotfiles/
 │   ├── sharedhosting/         # Shared hosting configs (no root)
 │   │   ├── .bashrc            # Bash config for shared hosts
 │   │   └── .aliases           # Shared hosting aliases
+│   ├── agent/                 # AI agent config installed by --agent-setup
+│   │   ├── claude/
+│   │   │   ├── settings.json  # Curated Claude Code settings
+│   │   │   └── skills/        # Skills pack copied to ~/.claude/skills/
+│   │   └── codex/
+│   │       └── config.toml    # Linux-safe Codex config
+│   ├── scripts/               # Custom scripts copied to ~/.scripts/
 │   └── .config/
 │       ├── ghostty/
 │       │   └── config                # Ghostty terminal config (Liquid Glass)
@@ -151,9 +161,12 @@ dotfiles/
 │           └── mrdemonwolf.omp.json  # Oh My Posh theme
 ├── lib/
 │   └── bootstrap.sh           # Shared server bootstrap helpers
+├── docs/
+│   └── jira-mcp-setup.md      # Atlassian/Jira MCP OAuth setup guide
 ├── Brewfile                   # Homebrew packages and casks
 ├── sync.sh                    # System -> repo sync script
 ├── install.sh                 # Repo -> system install script
+├── mini.sh                    # Minimal bootstrap (fnm, fzf, direnv, gh)
 ├── server.sh                  # Remote server bootstrap script
 ├── server-dev.sh              # Remote Linux dev-server bootstrap
 ├── sharedhosting.sh           # Shared hosting bootstrap (no root)
@@ -209,9 +222,15 @@ bash <(curl -fsSL .../server-dev.sh) --chrome
 `--hostname` (omit to leave it unchanged) updates both
 `hostnamectl` and the `/etc/hosts` `127.0.1.1` line. `--ai`
 installs `@anthropic-ai/claude-code` and `@openai/codex`
-globally via npm; `--pnpm` installs pnpm (both run after Node is
-set up, so npm is available). Flags combine, e.g.
-`--hostname random --ai --pnpm`.
+globally via npm, plus `bubblewrap` (Codex's Linux sandbox);
+`--pnpm` installs pnpm (both run after Node is set up, so npm is
+available). Flags combine, e.g. `--hostname random --ai --pnpm`.
+
+Run `--help` (or `-h`) for the full flag list:
+
+```bash
+bash <(curl -fsSL .../server-dev.sh) --help
+```
 
 ### Agent setup (`--agent-setup`)
 
@@ -243,30 +262,6 @@ Existing `settings.json` / `config.toml` are backed up to
 provisioned headlessly. See
 [docs/jira-mcp-setup.md](docs/jira-mcp-setup.md).
 
-### Headless browser (`--chrome`)
-
-Installs a headless-capable browser so automation tools can drive
-it and take screenshots — Google Chrome on `amd64`, Chromium on
-other arches, plus rendering fonts.
-
-Quick smoke test:
-
-```bash
-google-chrome-stable --headless=new --screenshot=/tmp/shot.png \
-  --window-size=1280,800 https://example.com && ls -la /tmp/shot.png
-```
-
-To let Claude Code / Codex *drive* the browser (click, read,
-screenshot), add a browser MCP that targets the system Chrome,
-e.g.:
-
-```bash
-claude mcp add chrome-devtools -- npx chrome-devtools-mcp@latest
-```
-
-Puppeteer/Playwright scripts can point at the installed binary
-(`google-chrome-stable`) instead of downloading their own.
-
 **Prerequisite:** create the sudo account and add your SSH public
 key to its `~/.ssh/authorized_keys` **first**, then run this as
 that account. The script hardens the box — it does not create the
@@ -274,7 +269,7 @@ user.
 
 On top of the base zsh environment, this installs:
 
-- **fnm + latest Node.js** — with `--use-on-cd` auto-switching
+- **fnm + latest LTS Node.js** — with `--use-on-cd` auto-switching
 - **Docker** — via the official `get.docker.com` script; your
   user is added to the `docker` group (log out/in to apply)
 - **Dev CLIs** — `gh`, `direnv`, `bun`, `go`, `build-essential`,
@@ -307,6 +302,38 @@ disconnect the first one.**
 
 Linux only (exits early on macOS — use `install.sh` there).
 Safe to re-run; hardening is idempotent.
+
+### Headless browser (`--chrome`)
+
+Installs a headless-capable browser so automation tools can drive
+it and take screenshots — Google Chrome on `amd64`, Chromium on
+other arches, plus rendering fonts.
+
+Quick smoke test:
+
+```bash
+google-chrome-stable --headless=new --screenshot=/tmp/shot.png \
+  --window-size=1280,800 https://example.com && ls -la /tmp/shot.png
+```
+
+**`--chrome` installs the browser only.** Unlike the Atlassian
+MCP, a browser MCP is **not** registered for you — without one,
+Claude Code and Codex cannot drive Chrome. Add it per client:
+
+```bash
+# Claude Code
+claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest
+```
+
+```toml
+# Codex — add to ~/.codex/config.toml
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@latest"]
+```
+
+Puppeteer/Playwright scripts can point at the installed binary
+(`google-chrome-stable`) instead of downloading their own.
 
 ### After it runs
 
