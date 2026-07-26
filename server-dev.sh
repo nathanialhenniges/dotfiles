@@ -25,6 +25,35 @@ WOLF_HOSTNAMES=(fenrir lupus luna shadow ghost timber sirius akela balto \
   storm aspen grey nanuk yuki koda tundra vesper draco onyx rowan)
 
 # Parse flags.
+# Help text is embedded, not scraped from "$0" — under the documented
+# `bash <(curl ...)` invocation $0 is a /dev/fd pipe that is already consumed,
+# so self-grepping printed nothing at all.
+usage() {
+  cat <<'USAGE'
+server-dev.sh — bootstrap a Linux dev server: zsh env + dev tooling + hardening.
+
+Usage:
+  bash <(curl -fsSL .../server-dev.sh) [flags]
+
+Flags:
+  --hostname <name|random>  set hostname (random = wolf-themed). Omit to keep current.
+  --ai                      install Claude Code + Codex CLIs (+ bubblewrap sandbox)
+  --pnpm                    install pnpm
+  --agent-setup             implies --ai; also installs plugins into both CLIs,
+                            the skills pack, curated settings, and pre-registers
+                            the Atlassian (Jira) MCP
+  --chrome                  install headless Chrome/Chromium for browser automation
+  -h, --help                show this help
+
+Always applied: dev toolchain (fnm + latest LTS Node, Docker, gh, direnv, bun,
+go, build-essential, jq, eza, btop), ~/Developer and ~/Downloads, and base
+hardening (key-only sshd, UFW SSH-only, sysctl, fail2ban, unattended upgrades).
+
+Password auth is only disabled once ~/.ssh/authorized_keys exists for the
+running user, so a keyless box is never locked out.
+USAGE
+}
+
 HOSTNAME_ARG=""
 INSTALL_AI=""
 INSTALL_PNPM=""
@@ -38,8 +67,7 @@ while [[ $# -gt 0 ]]; do
     --pnpm)        INSTALL_PNPM=1; shift ;;
     --agent-setup) AGENT_SETUP=1; shift ;;
     --chrome)      INSTALL_CHROME=1; shift ;;
-    -h|--help)
-      grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)     usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
       echo "Try: --hostname <name|random>, --ai, --pnpm, --agent-setup, --chrome, --help" >&2
