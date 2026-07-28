@@ -217,6 +217,9 @@ bash <(curl -fsSL .../server-dev.sh) --agent-setup
 
 # headless Chrome/Chromium for browser automation + screenshots
 bash <(curl -fsSL .../server-dev.sh) --chrome
+
+# skip UFW — only when a provider firewall already fronts the host
+bash <(curl -fsSL .../server-dev.sh) --no-firewall
 ```
 
 `--hostname` (omit to leave it unchanged) updates both
@@ -286,7 +289,8 @@ Ansible roles):
   prohibit-password`, `PasswordAuthentication no`, `MaxAuthTries
   3`, keep-alives. Validated with `sshd -t` before restart.
 - **UFW firewall** — default-deny inbound, **SSH (22) only**
-  open. Reach dev app ports via SSH forwarding (below).
+  open. Reach dev app ports via SSH forwarding (below). Skip it
+  with `--no-firewall` (see below).
 - **sysctl** — anti-spoof, SYN-flood, and ICMP-redirect
   protections.
 - **fail2ban** — bans SSH brute-force (default `sshd` jail).
@@ -299,6 +303,23 @@ key → password auth is left on and you get a warning, so a
 keyless box never becomes unreachable. After it runs, **open a
 second SSH session to confirm key login works before you
 disconnect the first one.**
+
+**`--no-firewall`** skips UFW entirely. Use it only where the
+provider already filters inbound in front of the host — cloud
+security groups, VPC firewall rules, that sort of thing. Two
+reasons it can be the better setup there:
+
+- Those rules are edited from a browser without touching the
+  box, so a mistake is recoverable. UFW is not: the firewall you
+  can only fix from inside is the one that can shut you out of
+  it.
+- They are enforced upstream of the host, so Docker cannot
+  publish past them. UFW alone does not stop that — a container
+  started with `-p` is reachable regardless of `ufw status`.
+
+It stays opt-in because a host with nothing in front of it gets
+no filtering at all this way. Either way `nmap` from off-box is
+the only honest check; `ufw status` is not evidence.
 
 Linux only (exits early on macOS — use `install.sh` there).
 Safe to re-run; hardening is idempotent.
@@ -352,9 +373,11 @@ The script prints these next steps when it finishes:
 
 ### Reaching dev ports over SSH
 
-Because UFW opens **only** SSH, you reach a dev server's app
-ports (Vite, Node, etc.) by tunnelling them over your existing
-SSH connection — no inbound firewall holes needed.
+Because only SSH is open, you reach a dev server's app ports
+(Vite, Node, etc.) by tunnelling them over your existing SSH
+connection — no inbound firewall holes needed. This is the right
+approach whether the filtering comes from UFW or from a provider
+firewall under `--no-firewall`.
 
 Ad-hoc, per session:
 

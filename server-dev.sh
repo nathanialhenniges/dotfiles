@@ -2,8 +2,8 @@
 # Bootstrap a remote Linux dev server: clean zsh env + dev tooling + hardening.
 # Installs everything server.sh does, plus fnm/Node, Docker, and dev CLIs
 # (gh, direnv, bun, go, build-essential, jq, eza, btop), then applies base
-# hardening (key-only sshd, UFW SSH-only, sysctl, fail2ban, auto security
-# upgrades).
+# hardening (key-only sshd, sysctl, fail2ban, auto security upgrades, and UFW
+# SSH-only unless --no-firewall).
 #
 # Usage:
 #   bash <(curl -fsSL .../server-dev.sh)                       # no hostname change
@@ -13,6 +13,7 @@
 #   bash <(curl -fsSL .../server-dev.sh) --pnpm                # also install pnpm
 #   bash <(curl -fsSL .../server-dev.sh) --agent-setup         # +CLIs, plugins, skills, settings, Jira MCP
 #   bash <(curl -fsSL .../server-dev.sh) --chrome              # headless Chrome/Chromium for browser automation
+#   bash <(curl -fsSL .../server-dev.sh) --no-firewall         # skip UFW (a cloud firewall already fronts the host)
 #
 # (When piping via process substitution, flags go after the closing paren.)
 set -e
@@ -43,14 +44,24 @@ Flags:
                             the skills pack, curated settings, and pre-registers
                             the Atlassian (Jira) MCP
   --chrome                  install headless Chrome/Chromium for browser automation
+  --no-firewall             skip UFW entirely. Only for hosts already behind a
+                            provider firewall (security groups, VPC rules) that
+                            you can edit without logging into the box.
   -h, --help                show this help
 
 Always applied: dev toolchain (fnm + latest LTS Node, Docker, gh, direnv, bun,
 go, build-essential, jq, eza, btop), ~/Developer and ~/Downloads, and base
-hardening (key-only sshd, UFW SSH-only, sysctl, fail2ban, unattended upgrades).
+hardening (key-only sshd, sysctl, fail2ban, unattended upgrades) plus UFW
+default-deny with SSH-only unless --no-firewall is given.
 
 Password auth is only disabled once ~/.ssh/authorized_keys exists for the
 running user, so a keyless box is never locked out.
+
+Why --no-firewall exists: a firewall you can only edit from inside the box is
+also the one that can lock you out of it. Where the provider offers an
+out-of-band firewall, letting that be the single control keeps the way back in
+reachable from a browser. It is opt-in because on a host with no such firewall
+in front of it, skipping UFW leaves nothing at all.
 USAGE
 }
 
@@ -59,18 +70,29 @@ INSTALL_AI=""
 INSTALL_PNPM=""
 AGENT_SETUP=""
 INSTALL_CHROME=""
+SKIP_FIREWALL=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --hostname)    HOSTNAME_ARG="${2:-random}"; shift; [[ $# -gt 0 ]] && shift ;;
-    --hostname=*)  HOSTNAME_ARG="${1#*=}"; shift ;;
+    --hostname)
+      # "${2:-random}" used to swallow the NEXT FLAG as the hostname:
+      # `--hostname --ai` dropped --ai and then failed inside hostnamectl.
+      if [[ -z "${2:-}" || "$2" == -* ]]; then
+        echo "--hostname needs a value (a name, or 'random')" >&2; exit 1
+      fi
+      HOSTNAME_ARG="$2"; shift 2 ;;
+    --hostname=*)
+      HOSTNAME_ARG="${1#*=}"
+      [[ -n "$HOSTNAME_ARG" ]] || { echo "--hostname= needs a value" >&2; exit 1; }
+      shift ;;
     --ai)          INSTALL_AI=1; shift ;;
     --pnpm)        INSTALL_PNPM=1; shift ;;
     --agent-setup) AGENT_SETUP=1; shift ;;
     --chrome)      INSTALL_CHROME=1; shift ;;
+    --no-firewall) SKIP_FIREWALL=1; shift ;;
     -h|--help)     usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --hostname <name|random>, --ai, --pnpm, --agent-setup, --chrome, --help" >&2
+      echo "Try: --hostname <name|random>, --ai, --pnpm, --agent-setup, --chrome, --no-firewall, --help" >&2
       exit 1 ;;
   esac
 done
@@ -332,27 +354,69 @@ install_security_packages() {
   sudo apt install -y ufw fail2ban ca-certificates gnupg
 }
 
+# Whether $1's authorized_keys holds a key sshd would actually accept.
+# `[[ -s ]]` is not enough: a file containing "# paste your key here" is
+# non-empty and fails ssh-keygen, and StrictModes makes sshd ignore the file
+# entirely if the home or .ssh dir is group/world-writable. Both cases used to
+# read as "key present" and disable password auth on a box with no way in.
+has_usable_ssh_key() {
+  local home="$1" keys="$1/.ssh/authorized_keys"
+  [[ -s "$keys" ]] || return 1
+  # ssh-keygen -l happily fingerprints a PRIVATE key too, so it alone would
+  # accept a file with a private key pasted in by mistake — which sshd then
+  # ignores. Require an actual public-key line as well.
+  grep -qE '^[[:space:]]*(ssh-(rsa|ed25519|dss)|ecdsa-sha2-[a-z0-9-]+|sk-(ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com)[[:space:]]+AAAA' "$keys" || return 1
+  ssh-keygen -l -f "$keys" >/dev/null 2>&1 || return 1
+  # StrictModes: sshd refuses group/world-writable $HOME or ~/.ssh.
+  local perms
+  for d in "$home" "$home/.ssh"; do
+    perms=$(stat -c '%a' "$d" 2>/dev/null) || return 0
+    [[ "${perms: -2}" =~ ^[0-5][0-5]$ ]] || return 1
+  done
+  return 0
+}
+
 harden_ssh() {
   log "Hardening sshd..."
-  # Ubuntu's stock sshd_config already `Include`s /etc/ssh/sshd_config.d/*.conf,
-  # so a drop-in is safer than rewriting the whole file.
-  local dropin="/etc/ssh/sshd_config.d/99-hardening.conf"
+  # Ubuntu's stock sshd_config Includes /etc/ssh/sshd_config.d/*.conf as its
+  # FIRST directive, and sshd keeps the first value it sees for each keyword.
+  # Cloud images ship 50-cloud-init.conf with `PasswordAuthentication yes`, so
+  # a 99- drop-in silently loses every conflict — the box kept accepting
+  # passwords while this script reported it had hardened. 00- wins instead, and
+  # the sshd -T check at the end verifies it rather than assuming.
+  local dropin="/etc/ssh/sshd_config.d/00-hardening.conf"
+  sudo rm -f /etc/ssh/sshd_config.d/99-hardening.conf
 
-  # Lockout guard: only kill password auth once THIS user has a key installed,
-  # otherwise a keyless box with password auth off is unreachable.
-  local password_line
-  if [[ -s "$HOME/.ssh/authorized_keys" ]]; then
+  # Act on the account that will actually log in. Under `sudo bash <(curl ...)`
+  # $HOME is /root and $USER is root, so the old check inspected root's keys and
+  # could disable password auth for a keyless human.
+  local target_user target_home
+  target_user="${SUDO_USER:-$(id -un)}"
+  target_home=$(getent passwd "$target_user" | cut -d: -f6)
+  [[ -n "$target_home" ]] || target_home="$HOME"
+
+  # Lockout guard. Password auth and root-password login are only withdrawn
+  # once a key that sshd will honour is in place for that account.
+  local password_line root_line
+  if has_usable_ssh_key "$target_home"; then
     password_line="PasswordAuthentication no"
+    root_line="PermitRootLogin prohibit-password"
+    substep "Key verified for $target_user — disabling password auth"
   else
-    password_line="# PasswordAuthentication left ON — no ~/.ssh/authorized_keys found for $USER"
-    substep "WARNING: no SSH key for $USER — leaving password auth ENABLED."
-    substep "         Add your key to ~/.ssh/authorized_keys, then re-run to lock it down."
+    password_line="# PasswordAuthentication left ON — no usable key for $target_user"
+    # PermitRootLogin used to be written unconditionally. On a provider that
+    # gives you a root password and no key, that alone was a hard lockout.
+    root_line="# PermitRootLogin left at default — no usable key for $target_user"
+    substep "WARNING: no usable SSH key for $target_user ($target_home/.ssh/authorized_keys)."
+    substep "         Password auth and root login left ENABLED — this box is NOT hardened."
+    substep "         Install a key (check perms: chmod 700 ~/.ssh, 600 authorized_keys),"
+    substep "         then re-run to lock it down."
   fi
 
-  # Mirrors roles/ssh/templates/sshd_config.j2 (Port 22 kept as the default).
+  # Mirrors roles/ssh/templates/sshd_config.j2.
   sudo tee "$dropin" >/dev/null <<EOF
 # Managed by server-dev.sh — mirrors mrdemonwolf/server-setup ssh role.
-PermitRootLogin prohibit-password
+$root_line
 $password_line
 PubkeyAuthentication yes
 X11Forwarding no
@@ -365,13 +429,29 @@ EOF
   sudo chmod 0644 "$dropin"
 
   # Validate before restarting — a bad config must never take down sshd.
-  if sudo sshd -t; then
-    sudo systemctl restart ssh
-    substep "sshd hardened and restarted"
-  else
+  if ! sudo sshd -t; then
     substep "ERROR: sshd -t failed — removing drop-in, sshd left unchanged"
     sudo rm -f "$dropin"
     return 1
+  fi
+
+  # A failed restart used to abort the whole script under `set -e`, leaving the
+  # drop-in on disk to take effect unsupervised at the next boot.
+  if ! sudo systemctl reload ssh 2>/dev/null && ! sudo systemctl restart ssh; then
+    substep "ERROR: sshd reload/restart failed — removing drop-in and reverting"
+    sudo rm -f "$dropin"
+    sudo systemctl restart ssh || true
+    return 1
+  fi
+
+  # Report what sshd RESOLVED, not what we wrote. This is the check that would
+  # have caught the 99- vs 50-cloud-init ordering bug.
+  local eff
+  eff=$(sudo sshd -T 2>/dev/null | grep -E '^(passwordauthentication|permitrootlogin|port) ' | tr '\n' ' ')
+  substep "sshd reloaded — effective: ${eff:-unknown}"
+  if [[ "$password_line" == "PasswordAuthentication no" && "$eff" != *"passwordauthentication no"* ]]; then
+    substep "WARNING: password auth is STILL ENABLED — another drop-in in"
+    substep "         /etc/ssh/sshd_config.d/ is overriding this one. Check it."
   fi
 }
 
@@ -415,18 +495,36 @@ net.ipv6.conf.default.accept_redirects = 0
 # Swap tuning (low swappiness — only use swap when really needed)
 vm.swappiness = 10
 EOF
-  sudo sysctl --system >/dev/null
+  # Containers (LXC/OpenVZ/Proxmox) expose some of these keys read-only, so a
+  # non-zero exit here is expected there. Under `set -e` it used to abort the
+  # run BEFORE the firewall, fail2ban and sshd hardening — a box that ran the
+  # hardening script and got none of it.
+  sudo sysctl --system >/dev/null 2>&1 \
+    || substep "some sysctl keys unsupported (container?) — continuing"
   substep "sysctl hardening applied"
 }
 
 harden_firewall() {
   log "Configuring UFW (SSH only)..."
+  # Ask sshd which ports it actually listens on rather than assuming 22. A
+  # pre-existing `Port 2222` from a provider drop-in used to survive here, and
+  # `ufw allow 22` then locked the box on the NEXT connect — the live session
+  # stayed up on the ESTABLISHED rule, so the run looked like it worked.
+  local ports
+  ports=$(sudo sshd -T 2>/dev/null | awk '/^port /{print $2}')
+  [[ -n "$ports" ]] || ports=22
+
   sudo ufw default deny incoming
   sudo ufw default allow outgoing
   # Allow SSH BEFORE enabling, or enabling drops the current session.
-  sudo ufw allow 22/tcp comment 'SSH'
+  local p
+  for p in $ports; do
+    sudo ufw allow "$p"/tcp comment 'SSH'
+  done
   sudo ufw --force enable
-  substep "UFW enabled — inbound denied except SSH (dev ports via 'ssh -L')"
+  substep "UFW enabled — inbound denied except SSH on: $(echo $ports | tr '\n' ' ')"
+  substep "NOTE: Docker publishes past UFW. A container run with -p is reachable"
+  substep "      regardless of this. Bind to 127.0.0.1 and use 'ssh -L'."
 }
 
 enable_unattended_upgrades() {
@@ -463,7 +561,22 @@ enable_fail2ban() {
 harden_server() {
   install_security_packages
   harden_sysctl
-  harden_firewall
+  if [[ -n "$SKIP_FIREWALL" ]]; then
+    # --no-firewall skips CONFIGURING ufw; it does not disable an already-active
+    # one. Saying "nothing is filtering this host" to someone whose earlier run
+    # enabled UFW sends them hunting the wrong layer when a port stays shut.
+    if sudo ufw status 2>/dev/null | grep -q '^Status: active'; then
+      substep "UFW SKIPPED (--no-firewall) but UFW is ALREADY ACTIVE from an"
+      substep "       earlier run and is still enforcing. This flag did not turn"
+      substep "       it off — run 'sudo ufw disable' if that is what you meant."
+    else
+      substep "UFW SKIPPED (--no-firewall) — inbound is only filtered by whatever"
+      substep "       sits in front of this host. Verify with nmap from off-box;"
+      substep "       'ufw status' on an unconfigured host proves nothing."
+    fi
+  else
+    harden_firewall
+  fi
   enable_unattended_upgrades
   enable_fail2ban
   # SSH last: if it fails validation it aborts here without having skipped the
@@ -506,12 +619,18 @@ install_docker
 # Semi-lockdown hardening
 harden_server
 
-set_default_shell
+# Cloud images create the default user with a locked password, and chsh
+# authenticates through PAM against it — so this can fail on a perfectly good
+# box. Under `set -e` that used to kill the script here, taking the Next-steps
+# block with it, including the one line that tells you to verify key login
+# before disconnecting. The least important step was destroying the most
+# important safety net.
+set_default_shell || substep "chsh failed — run: sudo chsh -s \$(which zsh) $(id -un)"
 
 echo ""
 echo "==> Done! Next steps:"
 echo "    - Open a SECOND SSH session NOW to confirm key login still works"
-echo "      before you disconnect this one (sshd was just restarted)."
+echo "      before you disconnect this one (sshd was just reloaded)."
 echo "    - Reconnect your SSH session to start using zsh + fnm."
 echo "    - Log out and back in for Docker group membership to apply."
 echo "    - Run 'gh auth login' to authenticate the GitHub CLI."
