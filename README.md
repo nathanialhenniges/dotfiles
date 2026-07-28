@@ -190,25 +190,41 @@ Homebrew, no Node.js. Safe to re-run to pull updated configs.
 ## Dev Server Setup
 
 Bootstrap a remote **Linux dev server** — everything `server.sh`
-sets up, plus a full development toolchain **and semi-lockdown
-hardening** — with one command over SSH:
+sets up, plus a full development toolchain:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/server-dev.sh)
 ```
 
+> ### ⚠️ This does not harden the machine
+>
+> `server-dev.sh` does **not** touch `sshd`, does **not** configure a
+> firewall, and does **not** install fail2ban, sysctl hardening, or
+> unattended security upgrades. On a bare internet-facing host it
+> leaves password SSH enabled and every port open. It also installs
+> Docker, whose published ports bypass a host firewall even where one
+> exists.
+>
+> That is deliberate. This is a dotfiles repo — shell config, editor
+> config, dev tooling. Deciding who can reach a server is server
+> devops: it belongs with the infrastructure code that owns those
+> machines, and not in a public repo. Hardening used to live here and
+> was moved out.
+>
+> **Run this on a box that is already secured** — behind a VPN, a
+> bastion, a cloud security group, or provisioned by something that
+> hardened it first. For a machine reachable from the internet, harden
+> it before you install anything, then let this handle the dev
+> environment.
+>
+> `--hostname` and `--no-firewall` were removed along with the
+> hardening. Passing either now exits with an error rather than being
+> silently ignored — being quietly dropped is how you end up believing
+> a box was hardened.
+
 Optional flags:
 
 ```bash
-# explicit hostname (short name)
-bash <(curl -fsSL .../server-dev.sh) --hostname devbox
-
-# or an FQDN — sets the short name, and `hostname -f` resolves
-bash <(curl -fsSL .../server-dev.sh) --hostname devbox.example.com
-
-# random wolf-themed hostname (fenrir, luna, timber, sirius, …)
-bash <(curl -fsSL .../server-dev.sh) --hostname random
-
 # also install the Claude Code + Codex CLIs (npm globals)
 bash <(curl -fsSL .../server-dev.sh) --ai
 
@@ -220,26 +236,12 @@ bash <(curl -fsSL .../server-dev.sh) --agent-setup
 
 # headless Chrome/Chromium for browser automation + screenshots
 bash <(curl -fsSL .../server-dev.sh) --chrome
-
-# skip UFW — only when a provider firewall already fronts the host
-bash <(curl -fsSL .../server-dev.sh) --no-firewall
 ```
 
-`--hostname` (omit to leave it unchanged) updates both
-`hostnamectl` and the `/etc/hosts` `127.0.1.1` line, following
-Debian convention: `127.0.0.1` stays `localhost`, and the
-machine's own name lives on `127.0.1.1`. Pass an FQDN and the
-line becomes `127.0.1.1  fqdn short` — that order is what
-`hostname -f` reads. Names are validated against RFC 1123
-(letters, digits, hyphens; no leading/trailing hyphen; 63 char
-max) before anything is changed. On a cloud image it also writes
-`/etc/cloud/cloud.cfg.d/99-preserve-hostname.cfg`, without which
-cloud-init rewrites the hostname *and* `/etc/hosts` on every
-boot and the rename silently reverts. `--ai`
-installs `@anthropic-ai/claude-code` and `@openai/codex`
+`--ai` installs `@anthropic-ai/claude-code` and `@openai/codex`
 globally via npm, plus `bubblewrap` (Codex's Linux sandbox);
 `--pnpm` installs pnpm (both run after Node is set up, so npm is
-available). Flags combine, e.g. `--hostname random --ai --pnpm`.
+available). Flags combine, e.g. `--agent-setup --chrome`.
 
 Run `--help` (or `-h`) for the full flag list:
 
@@ -279,8 +281,8 @@ provisioned headlessly. See
 
 **Prerequisite:** create the sudo account and add your SSH public
 key to its `~/.ssh/authorized_keys` **first**, then run this as
-that account. The script hardens the box — it does not create the
-user.
+that account. This script does not create the user, and it does
+not secure the machine — see the warning above.
 
 On top of the base zsh environment, this installs:
 
@@ -293,48 +295,43 @@ On top of the base zsh environment, this installs:
 It also creates a basic home layout (`~/Developer`,
 `~/Downloads`; skipped if they exist).
 
-And it applies **base hardening** (ported from the
-[server-setup](https://github.com/MrDemonWolf/server-setup)
-Ansible roles):
+### What it deliberately does not do
 
-- **Key-only SSH** — hardened `sshd` drop-in: `PermitRootLogin
-  prohibit-password`, `PasswordAuthentication no`, `MaxAuthTries
-  3`, keep-alives. Validated with `sshd -t` before restart.
-- **UFW firewall** — default-deny inbound, **SSH (22) only**
-  open. Reach dev app ports via SSH forwarding (below). Skip it
-  with `--no-firewall` (see below).
-- **sysctl** — anti-spoof, SYN-flood, and ICMP-redirect
-  protections.
-- **fail2ban** — bans SSH brute-force (default `sshd` jail).
-- **Unattended security upgrades** — hands-free patching, no
-  auto-reboot.
+No `sshd` changes. No firewall. No fail2ban. No sysctl. No
+unattended upgrades. No hostname changes.
 
-**Lockout guard:** `PasswordAuthentication no` is only applied
-when the running user already has `~/.ssh/authorized_keys`. No
-key → password auth is left on and you get a warning, so a
-keyless box never becomes unreachable. After it runs, **open a
-second SSH session to confirm key login works before you
-disconnect the first one.**
+All of that used to live here and now lives with the
+infrastructure code that provisions these machines. Two reasons:
 
-**`--no-firewall`** skips UFW entirely. Use it only where the
-provider already filters inbound in front of the host — cloud
-security groups, VPC firewall rules, that sort of thing. Two
-reasons it can be the better setup there:
+- **A dotfiles repo is the wrong home for a security posture.**
+  Shell config and firewall rules have different blast radii and
+  different review needs. Mixing them meant a change to either
+  looked like a change to "dotfiles".
+- **This repo is public.** How our servers decide who gets in is
+  not something to publish, and the details that make hardening
+  correct for *our* boxes are exactly the details that make it
+  wrong for someone else's.
 
-- Those rules are edited from a browser without touching the
-  box, so a mistake is recoverable. UFW is not: the firewall you
-  can only fix from inside is the one that can shut you out of
-  it.
-- They are enforced upstream of the host, so Docker cannot
-  publish past them. UFW alone does not stop that — a container
-  started with `-p` is reachable regardless of `ufw status`.
+**Docker is the sharp edge.** This script installs it, and Docker
+publishes container ports straight into netfilter's `nat` table,
+below a host firewall's INPUT rules. A container started with
+`-p 3000:3000` is reachable from anywhere that can route to the
+host, no matter what `ufw status` says — and `ufw status` will
+not mention it. Bind app ports to `127.0.0.1` and reach them with
+`ssh -L` (below), or make sure whatever provisioned the box
+installed a `DOCKER-USER` default-deny.
 
-It stays opt-in because a host with nothing in front of it gets
-no filtering at all this way. Either way `nmap` from off-box is
-the only honest check; `ufw status` is not evidence.
+Whatever hardens the box should run **before** this script, not
+after. Any of the ~15 network-dependent installs here can fail on
+a flaky mirror, and under `set -e` that aborts the run — leaving
+a box with Docker installed and nothing else done. Harden first
+and a failed toolchain install costs you tooling, not exposure.
+
+`nmap` from off-box is the only honest check that a host is
+closed; `ufw status` is not evidence.
 
 Linux only (exits early on macOS — use `install.sh` there).
-Safe to re-run; hardening is idempotent.
+Safe to re-run.
 
 ### Headless browser (`--chrome`)
 
@@ -372,24 +369,26 @@ Puppeteer/Playwright scripts can point at the installed binary
 
 The script prints these next steps when it finishes:
 
-1. **Open a second SSH session now** to confirm key login still
-   works before you disconnect the first — `sshd` was just
-   restarted.
-2. **Reconnect** (or run `zsh`) to start using zsh + fnm.
-3. **Log out and back in** for Docker group membership to apply
+1. **Reconnect** (or run `zsh`) to start using zsh + fnm.
+2. **Log out and back in** for Docker group membership to apply
    (then `docker run hello-world` should work without `sudo`).
-4. **`gh auth login`** to authenticate the GitHub CLI (see the
+3. **`gh auth login`** to authenticate the GitHub CLI (see the
    single-org scoping note below).
-5. **Forward dev ports** from your laptop with `ssh -L` (see
+4. **Forward dev ports** from your laptop with `ssh -L` (see
    below).
+
+`sshd` is not restarted by this script, so there is no
+verify-before-you-disconnect step — but if something else
+hardened the box, that step belongs to *that* tool and you should
+still do it.
 
 ### Reaching dev ports over SSH
 
-Because only SSH is open, you reach a dev server's app ports
-(Vite, Node, etc.) by tunnelling them over your existing SSH
-connection — no inbound firewall holes needed. This is the right
-approach whether the filtering comes from UFW or from a provider
-firewall under `--no-firewall`.
+Reach a dev server's app ports (Vite, Node, etc.) by tunnelling
+them over your existing SSH connection rather than opening
+inbound holes. Right approach regardless of what is filtering the
+host — and the only one that also covers Docker-published ports,
+which bypass a host firewall entirely.
 
 Ad-hoc, per session:
 

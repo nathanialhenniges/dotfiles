@@ -1,19 +1,33 @@
 #!/bin/bash
-# Bootstrap a remote Linux dev server: clean zsh env + dev tooling + hardening.
+# Bootstrap a remote Linux dev server: clean zsh env + dev tooling.
 # Installs everything server.sh does, plus fnm/Node, Docker, and dev CLIs
-# (gh, direnv, bun, go, build-essential, jq, eza, btop), then applies base
-# hardening (key-only sshd, sysctl, fail2ban, auto security upgrades, and UFW
-# SSH-only unless --no-firewall).
+# (gh, direnv, bun, go, build-essential, jq, eza, btop).
+#
+# ⚠️  THIS SCRIPT DOES NOT HARDEN THE MACHINE.
+#
+#     It does not touch sshd, does not configure a firewall, does not install
+#     fail2ban, does not apply sysctl hardening, and does not enable unattended
+#     security upgrades. Run on a bare internet-facing host it will leave
+#     password SSH enabled and every port open. It installs Docker, whose
+#     published ports bypass a host firewall even when one is present.
+#
+#     That is deliberate, not an oversight. This is a dotfiles repo: shell
+#     config, editor config, dev tooling. Deciding who can reach a server is
+#     server devops, it belongs with the infrastructure code that owns those
+#     machines, and it does not belong in a public repo. Hardening used to live
+#     here and was moved out.
+#
+#     Use this on a box that is ALREADY secured — behind a VPN, a bastion, a
+#     cloud security group, or provisioned by something that hardened it first.
+#     For a machine reachable from the internet, provision it with a tool that
+#     hardens before it installs, and then let this handle the dev environment.
 #
 # Usage:
-#   bash <(curl -fsSL .../server-dev.sh)                       # no hostname change
-#   bash <(curl -fsSL .../server-dev.sh) --hostname foo        # set hostname to "foo"
-#   bash <(curl -fsSL .../server-dev.sh) --hostname random     # random wolf-themed hostname
+#   bash <(curl -fsSL .../server-dev.sh)                       # dev environment
 #   bash <(curl -fsSL .../server-dev.sh) --ai                  # also install Claude Code + Codex CLIs
 #   bash <(curl -fsSL .../server-dev.sh) --pnpm                # also install pnpm
 #   bash <(curl -fsSL .../server-dev.sh) --agent-setup         # +CLIs, plugins, skills, settings, Jira MCP
 #   bash <(curl -fsSL .../server-dev.sh) --chrome              # headless Chrome/Chromium for browser automation
-#   bash <(curl -fsSL .../server-dev.sh) --no-firewall         # skip UFW (a cloud firewall already fronts the host)
 #
 # (When piping via process substitution, flags go after the closing paren.)
 #
@@ -22,17 +36,12 @@
 # alone a pipeline reports the status of its LAST command, so a 404 or a DNS
 # blip on the curl still exits 0 — tee cheerfully writes an empty keyring and
 # bash cheerfully runs an empty script. The run then continues and fails much
-# later somewhere unrelated. Three pipelines below deliberately tolerate a
-# non-zero producer and are guarded individually.
+# later somewhere unrelated.
 set -e
 set -o pipefail
 
 REPO_URL="https://github.com/nathanialhenniges/dotfiles.git"
 DOTFILES_DIR="$HOME/dotfiles"
-
-# Wolf-themed hostnames for --hostname random.
-WOLF_HOSTNAMES=(fenrir lupus luna shadow ghost timber sirius akela balto \
-  storm aspen grey nanuk yuki koda tundra vesper draco onyx rowan)
 
 # Parse flags.
 # Help text is embedded, not scraped from "$0" — under the documented
@@ -40,71 +49,60 @@ WOLF_HOSTNAMES=(fenrir lupus luna shadow ghost timber sirius akela balto \
 # so self-grepping printed nothing at all.
 usage() {
   cat <<'USAGE'
-server-dev.sh — bootstrap a Linux dev server: zsh env + dev tooling + hardening.
+server-dev.sh — bootstrap a Linux dev server: zsh env + dev tooling.
+
+THIS SCRIPT DOES NOT HARDEN THE MACHINE. No sshd changes, no firewall, no
+fail2ban, no sysctl, no unattended upgrades. On a bare internet-facing host it
+leaves password SSH on and every port open, and it installs Docker, whose
+published ports bypass a host firewall even where one exists.
+
+That is deliberate. This is a dotfiles repo — shell config, editor config, dev
+tooling. Who can reach a server is server devops; it belongs with the
+infrastructure code that owns those machines, not in a public dotfiles repo.
+Hardening used to live here and was moved out.
+
+Run this on a box that is ALREADY secured: behind a VPN, a bastion, a cloud
+security group, or provisioned by something that hardened it first.
 
 Usage:
   bash <(curl -fsSL .../server-dev.sh) [flags]
 
 Flags:
-  --hostname <name|random>  set hostname. Accepts a short name or an FQDN
-                            (host.example.com sets the short name and writes
-                            "127.0.1.1  fqdn short" the way Debian expects).
-                            random = wolf-themed. Omit to keep current.
   --ai                      install Claude Code + Codex CLIs (+ bubblewrap sandbox)
   --pnpm                    install pnpm
   --agent-setup             implies --ai; also installs plugins into both CLIs,
                             the skills pack, curated settings, and pre-registers
                             the Atlassian (Jira) MCP
   --chrome                  install headless Chrome/Chromium for browser automation
-  --no-firewall             skip UFW entirely. Only for hosts already behind a
-                            provider firewall (security groups, VPC rules) that
-                            you can edit without logging into the box.
   -h, --help                show this help
 
 Always applied: dev toolchain (fnm + latest LTS Node, Docker, gh, direnv, bun,
-go, build-essential, jq, eza, btop), ~/Developer and ~/Downloads, and base
-hardening (key-only sshd, sysctl, fail2ban, unattended upgrades) plus UFW
-default-deny with SSH-only unless --no-firewall is given.
-
-Password auth is only disabled once ~/.ssh/authorized_keys exists for the
-running user, so a keyless box is never locked out.
-
-Why --no-firewall exists: a firewall you can only edit from inside the box is
-also the one that can lock you out of it. Where the provider offers an
-out-of-band firewall, letting that be the single control keeps the way back in
-reachable from a browser. It is opt-in because on a host with no such firewall
-in front of it, skipping UFW leaves nothing at all.
+go, build-essential, jq, eza, btop), plus ~/Developer and ~/Downloads.
 USAGE
 }
 
-HOSTNAME_ARG=""
 INSTALL_AI=""
 INSTALL_PNPM=""
 AGENT_SETUP=""
 INSTALL_CHROME=""
-SKIP_FIREWALL=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --hostname)
-      # "${2:-random}" used to swallow the NEXT FLAG as the hostname:
-      # `--hostname --ai` dropped --ai and then failed inside hostnamectl.
-      if [[ -z "${2:-}" || "$2" == -* ]]; then
-        echo "--hostname needs a value (a name, or 'random')" >&2; exit 1
-      fi
-      HOSTNAME_ARG="$2"; shift 2 ;;
-    --hostname=*)
-      HOSTNAME_ARG="${1#*=}"
-      [[ -n "$HOSTNAME_ARG" ]] || { echo "--hostname= needs a value" >&2; exit 1; }
-      shift ;;
     --ai)          INSTALL_AI=1; shift ;;
     --pnpm)        INSTALL_PNPM=1; shift ;;
     --agent-setup) AGENT_SETUP=1; shift ;;
     --chrome)      INSTALL_CHROME=1; shift ;;
-    --no-firewall) SKIP_FIREWALL=1; shift ;;
     -h|--help)     usage; exit 0 ;;
+    --hostname|--hostname=*|--no-firewall)
+      # Moved out with the hardening. Fail loudly rather than silently ignoring
+      # a flag someone's muscle memory (or an old script) still passes — being
+      # quietly dropped is how you end up believing a box was hardened.
+      echo "$1 was removed from server-dev.sh — hostname and firewall are now" >&2
+      echo "handled by the provisioning script that hardens the box, not by" >&2
+      echo "dotfiles. This script installs the dev environment only." >&2
+      exit 1 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --hostname <name|random>, --ai, --pnpm, --agent-setup, --chrome, --no-firewall, --help" >&2
+      echo "Try: --ai, --pnpm, --agent-setup, --chrome, --help" >&2
       exit 1 ;;
   esac
 done
@@ -130,73 +128,6 @@ create_home_dirs() {
   log "Creating home directories..."
   mkdir -p "$HOME/Developer" "$HOME/Downloads"
   substep "~/Developer, ~/Downloads ready"
-}
-
-set_hostname() {
-  local name="$1"
-  if [[ "$name" == "random" ]]; then
-    name="${WOLF_HOSTNAMES[$RANDOM % ${#WOLF_HOSTNAMES[@]}]}"
-  fi
-
-  # Accept either a short name (devbox) or an FQDN (devbox.example.com).
-  # Debian/Ubuntu want the FQDN first on the 127.0.1.1 line, then the short
-  # name — `hostname -f` reads that line, so getting the order wrong is how you
-  # end up with a box that cannot resolve its own fully-qualified name.
-  local fqdn short
-  fqdn="$name"
-  short="${name%%.*}"
-
-  # RFC 1123 labels: alphanumeric and hyphen, no leading/trailing hyphen, <=63
-  # chars each. hostnamectl rejects bad names anyway, but it does it AFTER
-  # /etc/hosts might already have been touched, and under `set -e` that aborts
-  # the whole run with an opaque error.
-  if [[ ! "$short" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
-    echo "Invalid hostname '$short' — letters, digits and hyphens only," >&2
-    echo "must not start or end with a hyphen, 63 characters max." >&2
-    exit 1
-  fi
-
-  log "Setting hostname to '$short'..."
-  sudo hostnamectl set-hostname "$short"
-
-  # Cloud images run cloud-init with preserve_hostname: false, which rewrites
-  # the hostname AND /etc/hosts on every boot. Without this the rename silently
-  # reverts at the first reboot and the box answers to its old name again.
-  if [[ -d /etc/cloud ]]; then
-    sudo mkdir -p /etc/cloud/cloud.cfg.d
-    printf 'preserve_hostname: true\n' \
-      | sudo tee /etc/cloud/cloud.cfg.d/99-preserve-hostname.cfg >/dev/null
-    substep "cloud-init told to preserve the hostname across reboots"
-  fi
-
-  # 127.0.0.1 must stay localhost; the system's own name belongs on 127.0.1.1.
-  # Debian policy uses that second loopback address precisely so the hostname
-  # keeps resolving on a machine with no permanent IP.
-  grep -qE '^127\.0\.0\.1[[:space:]]+.*\blocalhost\b' /etc/hosts \
-    || printf '127.0.0.1\tlocalhost\n' | sudo tee -a /etc/hosts >/dev/null
-
-  local line
-  if [[ "$fqdn" == *.* ]]; then
-    line=$(printf '127.0.1.1\t%s %s' "$fqdn" "$short")
-  else
-    line=$(printf '127.0.1.1\t%s' "$short")
-  fi
-
-  # Rewrite via awk rather than `sed s///` — the replacement text is
-  # user-supplied and sed would treat & and \ in it as metacharacters. mktemp
-  # rather than a $$-predictable path, since /tmp is world-writable.
-  local tmp
-  tmp=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
-  awk -v repl="$line" \
-    '/^127\.0\.1\.1/ { if (!done) { print repl; done=1 } ; next }
-     { print }
-     END { if (!done) print repl }' /etc/hosts > "$tmp"
-  # cp onto the existing file keeps /etc/hosts own mode and ownership.
-  sudo cp "$tmp" /etc/hosts
-  rm -f "$tmp"
-
-  substep "Hostname set to '$short'$([[ "$fqdn" == *.* ]] && echo " (FQDN $fqdn)")"
-  substep "/etc/hosts: $(grep '^127\.0\.1\.1' /etc/hosts | head -1)"
 }
 
 install_dev_packages() {
@@ -407,257 +338,6 @@ agent_setup() {
   substep "  see $DOTFILES_DIR/docs/jira-mcp-setup.md (claude: /mcp; codex: first run)."
 }
 
-# ── Semi-lockdown hardening (always runs) ────────────────────────────────────
-# Ports the BASE hardening from mrdemonwolf/server-setup (ssh, sysctl, firewall,
-# unattended-upgrades). Assumes the sudo account + your SSH key already exist —
-# this script only hardens, it does NOT create the user.
-
-install_security_packages() {
-  log "Installing security packages..."
-  sudo apt install -y ufw fail2ban ca-certificates gnupg
-}
-
-# Whether $1's authorized_keys holds a key sshd would actually accept.
-# `[[ -s ]]` is not enough: a file containing "# paste your key here" is
-# non-empty and fails ssh-keygen, and StrictModes makes sshd ignore the file
-# entirely if the home or .ssh dir is group/world-writable. Both cases used to
-# read as "key present" and disable password auth on a box with no way in.
-has_usable_ssh_key() {
-  local home="$1" keys="$1/.ssh/authorized_keys"
-  [[ -s "$keys" ]] || return 1
-  # ssh-keygen -l happily fingerprints a PRIVATE key too, so it alone would
-  # accept a file with a private key pasted in by mistake — which sshd then
-  # ignores. Require an actual public-key line as well.
-  grep -qE '^[[:space:]]*(ssh-(rsa|ed25519|dss)|ecdsa-sha2-[a-z0-9-]+|sk-(ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com)[[:space:]]+AAAA' "$keys" || return 1
-  ssh-keygen -l -f "$keys" >/dev/null 2>&1 || return 1
-  # StrictModes: sshd refuses group/world-writable $HOME or ~/.ssh.
-  local perms
-  for d in "$home" "$home/.ssh"; do
-    perms=$(stat -c '%a' "$d" 2>/dev/null) || return 0
-    [[ "${perms: -2}" =~ ^[0-5][0-5]$ ]] || return 1
-  done
-  return 0
-}
-
-harden_ssh() {
-  log "Hardening sshd..."
-  # Ubuntu's stock sshd_config Includes /etc/ssh/sshd_config.d/*.conf as its
-  # FIRST directive, and sshd keeps the first value it sees for each keyword.
-  # Cloud images ship 50-cloud-init.conf with `PasswordAuthentication yes`, so
-  # a 99- drop-in silently loses every conflict — the box kept accepting
-  # passwords while this script reported it had hardened. 00- wins instead, and
-  # the sshd -T check at the end verifies it rather than assuming.
-  local dropin="/etc/ssh/sshd_config.d/00-hardening.conf"
-  sudo rm -f /etc/ssh/sshd_config.d/99-hardening.conf
-
-  # Act on the account that will actually log in. Under `sudo bash <(curl ...)`
-  # $HOME is /root and $USER is root, so the old check inspected root's keys and
-  # could disable password auth for a keyless human.
-  local target_user target_home
-  target_user="${SUDO_USER:-$(id -un)}"
-  # `|| true`: getent exits 2 for an unknown user, and under pipefail that would
-  # abort here instead of reaching the fallback on the next line — which exists
-  # precisely because this lookup is allowed to come up empty.
-  target_home=$(getent passwd "$target_user" | cut -d: -f6) || true
-  [[ -n "$target_home" ]] || target_home="$HOME"
-
-  # Lockout guard. Password auth and root-password login are only withdrawn
-  # once a key that sshd will honour is in place for that account.
-  local password_line root_line
-  if has_usable_ssh_key "$target_home"; then
-    password_line="PasswordAuthentication no"
-    root_line="PermitRootLogin prohibit-password"
-    substep "Key verified for $target_user — disabling password auth"
-  else
-    password_line="# PasswordAuthentication left ON — no usable key for $target_user"
-    # PermitRootLogin used to be written unconditionally. On a provider that
-    # gives you a root password and no key, that alone was a hard lockout.
-    root_line="# PermitRootLogin left at default — no usable key for $target_user"
-    substep "WARNING: no usable SSH key for $target_user ($target_home/.ssh/authorized_keys)."
-    substep "         Password auth and root login left ENABLED — this box is NOT hardened."
-    substep "         Install a key (check perms: chmod 700 ~/.ssh, 600 authorized_keys),"
-    substep "         then re-run to lock it down."
-  fi
-
-  # Mirrors roles/ssh/templates/sshd_config.j2.
-  sudo tee "$dropin" >/dev/null <<EOF
-# Managed by server-dev.sh — mirrors mrdemonwolf/server-setup ssh role.
-$root_line
-$password_line
-PubkeyAuthentication yes
-X11Forwarding no
-PrintLastLog no
-MaxAuthTries 3
-LoginGraceTime 30
-ClientAliveInterval 300
-ClientAliveCountMax 2
-EOF
-  sudo chmod 0644 "$dropin"
-
-  # Validate before restarting — a bad config must never take down sshd.
-  if ! sudo sshd -t; then
-    substep "ERROR: sshd -t failed — removing drop-in, sshd left unchanged"
-    sudo rm -f "$dropin"
-    return 1
-  fi
-
-  # A failed restart used to abort the whole script under `set -e`, leaving the
-  # drop-in on disk to take effect unsupervised at the next boot.
-  if ! sudo systemctl reload ssh 2>/dev/null && ! sudo systemctl restart ssh; then
-    substep "ERROR: sshd reload/restart failed — removing drop-in and reverting"
-    sudo rm -f "$dropin"
-    sudo systemctl restart ssh || true
-    return 1
-  fi
-
-  # Report what sshd RESOLVED, not what we wrote. This is the check that would
-  # have caught the 99- vs 50-cloud-init ordering bug.
-  local eff
-  # `|| true`: this line's whole job is to REPORT, and both `sshd -T` and the
-  # grep can legitimately come up empty. Under pipefail that empty result would
-  # abort the run at the exact step meant to reassure you it worked. The
-  # ${eff:-unknown} fallback below already handles the empty case.
-  eff=$(sudo sshd -T 2>/dev/null | grep -E '^(passwordauthentication|permitrootlogin|port) ' | tr '\n' ' ') || true
-  substep "sshd reloaded — effective: ${eff:-unknown}"
-  if [[ "$password_line" == "PasswordAuthentication no" && "$eff" != *"passwordauthentication no"* ]]; then
-    substep "WARNING: password auth is STILL ENABLED — another drop-in in"
-    substep "         /etc/ssh/sshd_config.d/ is overriding this one. Check it."
-  fi
-}
-
-harden_sysctl() {
-  log "Applying sysctl kernel hardening..."
-  # Verbatim from roles/sysctl/files/99-hardening.conf.
-  sudo tee /etc/sysctl.d/99-hardening.conf >/dev/null <<'EOF'
-# IP Spoofing protection
-net.ipv4.conf.all.rp_filter = 1
-net.ipv4.conf.default.rp_filter = 1
-
-# Ignore ICMP broadcast requests
-net.ipv4.icmp_echo_ignore_broadcasts = 1
-
-# Disable source packet routing
-net.ipv4.conf.all.accept_source_route = 0
-net.ipv6.conf.all.accept_source_route = 0
-net.ipv4.conf.default.accept_source_route = 0
-net.ipv6.conf.default.accept_source_route = 0
-
-# Ignore send redirects
-net.ipv4.conf.all.send_redirects = 0
-net.ipv4.conf.default.send_redirects = 0
-
-# Block SYN attacks
-net.ipv4.tcp_syncookies = 1
-net.ipv4.tcp_max_syn_backlog = 2048
-net.ipv4.tcp_synack_retries = 2
-net.ipv4.tcp_syn_retries = 5
-
-# Log Martians
-net.ipv4.conf.all.log_martians = 1
-net.ipv4.icmp_ignore_bogus_error_responses = 1
-
-# Ignore ICMP redirects
-net.ipv4.conf.all.accept_redirects = 0
-net.ipv6.conf.all.accept_redirects = 0
-net.ipv4.conf.default.accept_redirects = 0
-net.ipv6.conf.default.accept_redirects = 0
-
-# Swap tuning (low swappiness — only use swap when really needed)
-vm.swappiness = 10
-EOF
-  # Containers (LXC/OpenVZ/Proxmox) expose some of these keys read-only, so a
-  # non-zero exit here is expected there. Under `set -e` it used to abort the
-  # run BEFORE the firewall, fail2ban and sshd hardening — a box that ran the
-  # hardening script and got none of it.
-  sudo sysctl --system >/dev/null 2>&1 \
-    || substep "some sysctl keys unsupported (container?) — continuing"
-  substep "sysctl hardening applied"
-}
-
-harden_firewall() {
-  log "Configuring UFW (SSH only)..."
-  # Ask sshd which ports it actually listens on rather than assuming 22. A
-  # pre-existing `Port 2222` from a provider drop-in used to survive here, and
-  # `ufw allow 22` then locked the box on the NEXT connect — the live session
-  # stayed up on the ESTABLISHED rule, so the run looked like it worked.
-  local ports
-  # `|| true`: under pipefail a failing `sshd -T` would abort here rather than
-  # fall through to the `|| ports=22` default on the next line — turning a
-  # deliberate fallback into a hard stop, immediately before the firewall gets
-  # configured.
-  ports=$(sudo sshd -T 2>/dev/null | awk '/^port /{print $2}') || true
-  [[ -n "$ports" ]] || ports=22
-
-  sudo ufw default deny incoming
-  sudo ufw default allow outgoing
-  # Allow SSH BEFORE enabling, or enabling drops the current session.
-  local p
-  for p in $ports; do
-    sudo ufw allow "$p"/tcp comment 'SSH'
-  done
-  sudo ufw --force enable
-  substep "UFW enabled — inbound denied except SSH on: $(echo $ports | tr '\n' ' ')"
-  substep "NOTE: Docker publishes past UFW. A container run with -p is reachable"
-  substep "      regardless of this. Bind to 127.0.0.1 and use 'ssh -L'."
-}
-
-enable_unattended_upgrades() {
-  log "Enabling unattended security upgrades..."
-  sudo apt install -y unattended-upgrades apt-listchanges
-  # Verbatim from roles/unattended-upgrades.
-  sudo tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null <<'EOF'
-APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Unattended-Upgrade "1";
-APT::Periodic::AutocleanInterval "7";
-EOF
-  sudo tee /etc/apt/apt.conf.d/50unattended-upgrades >/dev/null <<'EOF'
-Unattended-Upgrade::Allowed-Origins {
-  "${distro_id}:${distro_codename}";
-  "${distro_id}:${distro_codename}-security";
-  "${distro_id}ESMApps:${distro_codename}-apps-security";
-  "${distro_id}ESM:${distro_codename}-infra-security";
-};
-Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
-Unattended-Upgrade::Remove-Unused-Dependencies "true";
-Unattended-Upgrade::Automatic-Reboot "false";
-EOF
-  sudo systemctl enable --now unattended-upgrades
-  substep "unattended-upgrades enabled (security origins, no auto-reboot)"
-}
-
-enable_fail2ban() {
-  log "Enabling fail2ban..."
-  # Default distro jail already protects sshd — no custom jail.local needed.
-  sudo systemctl enable --now fail2ban
-  substep "fail2ban enabled (default sshd jail)"
-}
-
-harden_server() {
-  install_security_packages
-  harden_sysctl
-  if [[ -n "$SKIP_FIREWALL" ]]; then
-    # --no-firewall skips CONFIGURING ufw; it does not disable an already-active
-    # one. Saying "nothing is filtering this host" to someone whose earlier run
-    # enabled UFW sends them hunting the wrong layer when a port stays shut.
-    if sudo ufw status 2>/dev/null | grep -q '^Status: active'; then
-      substep "UFW SKIPPED (--no-firewall) but UFW is ALREADY ACTIVE from an"
-      substep "       earlier run and is still enforcing. This flag did not turn"
-      substep "       it off — run 'sudo ufw disable' if that is what you meant."
-    else
-      substep "UFW SKIPPED (--no-firewall) — inbound is only filtered by whatever"
-      substep "       sits in front of this host. Verify with nmap from off-box;"
-      substep "       'ufw status' on an unconfigured host proves nothing."
-    fi
-  else
-    harden_firewall
-  fi
-  enable_unattended_upgrades
-  enable_fail2ban
-  # SSH last: if it fails validation it aborts here without having skipped the
-  # firewall/fail2ban protection above.
-  harden_ssh
-}
-
 # ── Run ──────────────────────────────────────────────────────────────────────
 
 detect_os
@@ -666,31 +346,11 @@ if [[ "$OS" == "Darwin" ]]; then
   exit 1
 fi
 
-# Hostname first, so the new name shows up everywhere downstream.
-[[ -n "$HOSTNAME_ARG" ]] && set_hostname "$HOSTNAME_ARG"
-
 # Home directory layout
 create_home_dirs
 
 # Base environment (shared with server.sh)
 install_base_packages
-
-# Hardening runs HERE — early, straight after base packages, and before any of
-# the dev tooling below.
-#
-# It used to run last, after ~15 network-dependent installs (apt repos, GitHub
-# keyrings, get.docker.com, bun, fnm, npm globals). Under `set -e` any one of
-# those failing aborts the run, and the old order meant the abort landed AFTER
-# Docker was installed and BEFORE sshd, UFW, fail2ban or sysctl had been
-# touched. The failure mode was a box with a container runtime, default sshd,
-# no firewall and no fail2ban — strictly worse than never having run the
-# script, and it looked like a simple "install failed" error.
-#
-# harden_server installs its own ufw + fail2ban and depends on nothing further
-# down, so this position costs nothing. Everything after it is convenience;
-# everything in it is the part you cannot safely skip.
-harden_server
-
 install_oh_my_zsh
 install_zsh_plugins
 install_oh_my_posh
