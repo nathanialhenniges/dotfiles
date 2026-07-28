@@ -16,7 +16,16 @@
 #   bash <(curl -fsSL .../server-dev.sh) --no-firewall         # skip UFW (a cloud firewall already fronts the host)
 #
 # (When piping via process substitution, flags go after the closing paren.)
+#
+# pipefail matters more here than anywhere else in this repo: almost every
+# install step is `curl ... | sudo tee` or `curl ... | bash`. With `set -e`
+# alone a pipeline reports the status of its LAST command, so a 404 or a DNS
+# blip on the curl still exits 0 — tee cheerfully writes an empty keyring and
+# bash cheerfully runs an empty script. The run then continues and fails much
+# later somewhere unrelated. Three pipelines below deliberately tolerate a
+# non-zero producer and are guarded individually.
 set -e
+set -o pipefail
 
 REPO_URL="https://github.com/nathanialhenniges/dotfiles.git"
 DOTFILES_DIR="$HOME/dotfiles"
@@ -446,7 +455,10 @@ harden_ssh() {
   # could disable password auth for a keyless human.
   local target_user target_home
   target_user="${SUDO_USER:-$(id -un)}"
-  target_home=$(getent passwd "$target_user" | cut -d: -f6)
+  # `|| true`: getent exits 2 for an unknown user, and under pipefail that would
+  # abort here instead of reaching the fallback on the next line — which exists
+  # precisely because this lookup is allowed to come up empty.
+  target_home=$(getent passwd "$target_user" | cut -d: -f6) || true
   [[ -n "$target_home" ]] || target_home="$HOME"
 
   # Lockout guard. Password auth and root-password login are only withdrawn
@@ -501,7 +513,11 @@ EOF
   # Report what sshd RESOLVED, not what we wrote. This is the check that would
   # have caught the 99- vs 50-cloud-init ordering bug.
   local eff
-  eff=$(sudo sshd -T 2>/dev/null | grep -E '^(passwordauthentication|permitrootlogin|port) ' | tr '\n' ' ')
+  # `|| true`: this line's whole job is to REPORT, and both `sshd -T` and the
+  # grep can legitimately come up empty. Under pipefail that empty result would
+  # abort the run at the exact step meant to reassure you it worked. The
+  # ${eff:-unknown} fallback below already handles the empty case.
+  eff=$(sudo sshd -T 2>/dev/null | grep -E '^(passwordauthentication|permitrootlogin|port) ' | tr '\n' ' ') || true
   substep "sshd reloaded — effective: ${eff:-unknown}"
   if [[ "$password_line" == "PasswordAuthentication no" && "$eff" != *"passwordauthentication no"* ]]; then
     substep "WARNING: password auth is STILL ENABLED — another drop-in in"
@@ -565,7 +581,11 @@ harden_firewall() {
   # `ufw allow 22` then locked the box on the NEXT connect — the live session
   # stayed up on the ESTABLISHED rule, so the run looked like it worked.
   local ports
-  ports=$(sudo sshd -T 2>/dev/null | awk '/^port /{print $2}')
+  # `|| true`: under pipefail a failing `sshd -T` would abort here rather than
+  # fall through to the `|| ports=22` default on the next line — turning a
+  # deliberate fallback into a hard stop, immediately before the firewall gets
+  # configured.
+  ports=$(sudo sshd -T 2>/dev/null | awk '/^port /{print $2}') || true
   [[ -n "$ports" ]] || ports=22
 
   sudo ufw default deny incoming
@@ -654,6 +674,23 @@ create_home_dirs
 
 # Base environment (shared with server.sh)
 install_base_packages
+
+# Hardening runs HERE — early, straight after base packages, and before any of
+# the dev tooling below.
+#
+# It used to run last, after ~15 network-dependent installs (apt repos, GitHub
+# keyrings, get.docker.com, bun, fnm, npm globals). Under `set -e` any one of
+# those failing aborts the run, and the old order meant the abort landed AFTER
+# Docker was installed and BEFORE sshd, UFW, fail2ban or sysctl had been
+# touched. The failure mode was a box with a container runtime, default sshd,
+# no firewall and no fail2ban — strictly worse than never having run the
+# script, and it looked like a simple "install failed" error.
+#
+# harden_server installs its own ufw + fail2ban and depends on nothing further
+# down, so this position costs nothing. Everything after it is convenience;
+# everything in it is the part you cannot safely skip.
+harden_server
+
 install_oh_my_zsh
 install_zsh_plugins
 install_oh_my_posh
@@ -669,9 +706,6 @@ install_fnm_node
 [[ -n "$AGENT_SETUP" ]] && agent_setup
 [[ -n "$INSTALL_CHROME" ]] && install_chrome
 install_docker
-
-# Semi-lockdown hardening
-harden_server
 
 # Cloud images create the default user with a locked password, and chsh
 # authenticates through PAM against it — so this can fail on a perfectly good

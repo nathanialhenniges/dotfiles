@@ -1,7 +1,12 @@
 #!/bin/bash
 # Bootstrap a remote server (macOS or Linux) with a clean zsh environment
 # Usage: bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/server.sh)
+#
+# pipefail so a failed download in a `curl ... | bash` step is not masked by the
+# exit status of the shell that then runs nothing. `set -e` alone reports only
+# the last command in a pipeline.
 set -e
+set -o pipefail
 
 REPO_URL="https://github.com/nathanialhenniges/dotfiles.git"
 DOTFILES_DIR="$HOME/dotfiles"

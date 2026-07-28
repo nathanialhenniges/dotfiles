@@ -63,9 +63,18 @@ copy_configs() {
   for file in $(find "$src" -type f); do
     relative="${file#"$src"/}"
     target="$HOME/$relative"
+    # Never overwrite an existing .backup. The copy was unconditional, so the
+    # SECOND run backed up the dotfiles-managed file over the pristine
+    # pre-dotfiles original — silently destroying the only copy of whatever was
+    # on the box before, at the exact moment you were most likely to want it.
+    # A backup that only survives until the next run is not a backup.
     if [[ -f "$target" ]]; then
-      cp "$target" "$target.backup"
-      substep "Backed up $target -> $target.backup"
+      if [[ -e "$target.backup" ]]; then
+        substep "Kept existing $target.backup (original preserved)"
+      else
+        cp "$target" "$target.backup"
+        substep "Backed up $target -> $target.backup"
+      fi
     fi
     mkdir -p "$(dirname "$target")"
     cp "$file" "$target"

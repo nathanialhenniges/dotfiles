@@ -45,9 +45,16 @@ for file in $(find "$CONFIG_DIR" -type f -not -path "$CONFIG_DIR/server/*"); do
     target="$HOME/$relative"
   fi
 
+  # Never overwrite an existing .backup — a second run would otherwise copy the
+  # dotfiles-managed file over the pristine pre-dotfiles original, destroying
+  # the only record of what was on the machine before.
   if [ -f "$target" ]; then
-    cp "$target" "$target.backup"
-    echo "Backed up $target → $target.backup"
+    if [ -e "$target.backup" ]; then
+      echo "Kept existing $target.backup (original preserved)"
+    else
+      cp "$target" "$target.backup"
+      echo "Backed up $target → $target.backup"
+    fi
   fi
   mkdir -p "$(dirname "$target")"
   cp "$file" "$target"
