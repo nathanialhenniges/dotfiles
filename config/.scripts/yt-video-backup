@@ -9,8 +9,33 @@ fi
 
 SLUG="$1"
 SOURCE="$HOME/Movies/Final Cut Projects/YouTube/$SLUG/"
-DEST="/Users/nathanialhenniges/Library/CloudStorage/GoogleDrive-nathanial.henniges@mrdemonwolf.com/My Drive/MultiMedia Projects/Social Media/YouTube/Video-Backups/$SLUG/"
 LOG="$HOME/Movies/.backup.log"
+
+# Resolve the Google Drive mount at runtime instead of hardcoding it. The old
+# absolute path pinned one Mac username and one Drive account, and rsync runs
+# with --delete below — pointed at a real-but-wrong directory it would clear
+# that directory out. Override with MEDIA_BACKUP_DRIVE if yours lives
+# elsewhere.
+resolve_drive() {
+  local d
+  if [[ -n "${MEDIA_BACKUP_DRIVE:-}" ]]; then
+    [[ -d "$MEDIA_BACKUP_DRIVE/My Drive" ]] && { printf '%s' "${MEDIA_BACKUP_DRIVE%/}"; return 0; }
+    return 1
+  fi
+  for d in "$HOME/Library/CloudStorage/GoogleDrive-"*/; do
+    [[ -d "$d/My Drive" ]] && { printf '%s' "${d%/}"; return 0; }
+  done
+  return 1
+}
+
+if ! DRIVE=$(resolve_drive); then
+  echo "❌ Google Drive is not mounted under ~/Library/CloudStorage." >&2
+  echo "   Open Google Drive and wait for it to sign in, or set MEDIA_BACKUP_DRIVE." >&2
+  echo "   Aborting before anything is copied." >&2
+  exit 1
+fi
+
+DEST="$DRIVE/My Drive/MultiMedia Projects/Social Media/YouTube/Video-Backups/$SLUG/"
 
 if [ ! -d "$SOURCE" ]; then
   echo "❌ Project not found: $SOURCE"

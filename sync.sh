@@ -14,10 +14,22 @@ files=(
   ".nuxtrc"
 )
 
+# Lines that must never be committed, matched per-file. Nuxt writes a
+# machine-specific telemetry.seed into ~/.nuxtrc on first run; without this
+# filter it comes straight back on the next sync after being removed.
+declare -A strip_patterns=(
+  [".nuxtrc"]='^telemetry\.seed='
+)
+
 for file in "${files[@]}"; do
   if [ -f "$HOME/$file" ]; then
-    cp "$HOME/$file" "$CONFIG_DIR/$file"
-    echo "Synced $file"
+    if [[ -n "${strip_patterns[$file]:-}" ]]; then
+      grep -v -E "${strip_patterns[$file]}" "$HOME/$file" > "$CONFIG_DIR/$file"
+      echo "Synced $file (filtered)"
+    else
+      cp "$HOME/$file" "$CONFIG_DIR/$file"
+      echo "Synced $file"
+    fi
   fi
 done
 

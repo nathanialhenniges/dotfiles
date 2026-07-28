@@ -2,8 +2,38 @@
 set -euo pipefail
 
 SOURCE="$HOME/Movies/OBS"
-DEST="/Users/nathanialhenniges/Library/CloudStorage/GoogleDrive-nathanial.henniges@mrdemonwolf.com/My Drive/MultiMedia Projects/Social Media/Recording"
 LOG="$HOME/Movies/OBS/.backup.log"
+
+# Resolve the Google Drive mount at runtime instead of hardcoding it.
+#
+# This matters for more than privacy. The old absolute path pinned one Mac
+# username and one Drive account, and `mkdir -p "$DEST"` below will happily
+# CREATE that literal path on a machine where Drive is not mounted. rsync then
+# copies into a dead local folder, reports success, and the cleanup further
+# down deletes the originals. Nothing fails, so `set -e` never fires.
+#
+# Override with MEDIA_BACKUP_DRIVE (e.g. exported from ~/.secrets) if your
+# Drive lives somewhere else.
+resolve_drive() {
+  local d
+  if [[ -n "${MEDIA_BACKUP_DRIVE:-}" ]]; then
+    [[ -d "$MEDIA_BACKUP_DRIVE/My Drive" ]] && { printf '%s' "${MEDIA_BACKUP_DRIVE%/}"; return 0; }
+    return 1
+  fi
+  for d in "$HOME/Library/CloudStorage/GoogleDrive-"*/; do
+    [[ -d "$d/My Drive" ]] && { printf '%s' "${d%/}"; return 0; }
+  done
+  return 1
+}
+
+if ! DRIVE=$(resolve_drive); then
+  echo "❌ Google Drive is not mounted under ~/Library/CloudStorage." >&2
+  echo "   Open Google Drive and wait for it to sign in, or set MEDIA_BACKUP_DRIVE." >&2
+  echo "   Aborting before anything is copied or deleted." >&2
+  exit 1
+fi
+
+DEST="$DRIVE/My Drive/MultiMedia Projects/Social Media/Recording"
 
 echo "▶ OBS backup started at $(date)" | tee -a "$LOG"
 echo "" | tee -a "$LOG"
