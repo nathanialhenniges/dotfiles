@@ -200,8 +200,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/m
 Optional flags:
 
 ```bash
-# explicit hostname
+# explicit hostname (short name)
 bash <(curl -fsSL .../server-dev.sh) --hostname devbox
+
+# or an FQDN — sets the short name, and `hostname -f` resolves
+bash <(curl -fsSL .../server-dev.sh) --hostname devbox.example.com
 
 # random wolf-themed hostname (fenrir, luna, timber, sirius, …)
 bash <(curl -fsSL .../server-dev.sh) --hostname random
@@ -223,7 +226,16 @@ bash <(curl -fsSL .../server-dev.sh) --no-firewall
 ```
 
 `--hostname` (omit to leave it unchanged) updates both
-`hostnamectl` and the `/etc/hosts` `127.0.1.1` line. `--ai`
+`hostnamectl` and the `/etc/hosts` `127.0.1.1` line, following
+Debian convention: `127.0.0.1` stays `localhost`, and the
+machine's own name lives on `127.0.1.1`. Pass an FQDN and the
+line becomes `127.0.1.1  fqdn short` — that order is what
+`hostname -f` reads. Names are validated against RFC 1123
+(letters, digits, hyphens; no leading/trailing hyphen; 63 char
+max) before anything is changed. On a cloud image it also writes
+`/etc/cloud/cloud.cfg.d/99-preserve-hostname.cfg`, without which
+cloud-init rewrites the hostname *and* `/etc/hosts` on every
+boot and the rename silently reverts. `--ai`
 installs `@anthropic-ai/claude-code` and `@openai/codex`
 globally via npm, plus `bubblewrap` (Codex's Linux sandbox);
 `--pnpm` installs pnpm (both run after Node is set up, so npm is

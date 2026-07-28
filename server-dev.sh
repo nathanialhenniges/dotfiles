@@ -37,7 +37,10 @@ Usage:
   bash <(curl -fsSL .../server-dev.sh) [flags]
 
 Flags:
-  --hostname <name|random>  set hostname (random = wolf-themed). Omit to keep current.
+  --hostname <name|random>  set hostname. Accepts a short name or an FQDN
+                            (host.example.com sets the short name and writes
+                            "127.0.1.1  fqdn short" the way Debian expects).
+                            random = wolf-themed. Omit to keep current.
   --ai                      install Claude Code + Codex CLIs (+ bubblewrap sandbox)
   --pnpm                    install pnpm
   --agent-setup             implies --ai; also installs plugins into both CLIs,
@@ -125,15 +128,66 @@ set_hostname() {
   if [[ "$name" == "random" ]]; then
     name="${WOLF_HOSTNAMES[$RANDOM % ${#WOLF_HOSTNAMES[@]}]}"
   fi
-  log "Setting hostname to '$name'..."
-  sudo hostnamectl set-hostname "$name"
-  # Keep /etc/hosts 127.0.1.1 in sync so `sudo` and name resolution stay happy.
-  if grep -q '^127\.0\.1\.1' /etc/hosts; then
-    sudo sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$name/" /etc/hosts
-  else
-    printf '127.0.1.1\t%s\n' "$name" | sudo tee -a /etc/hosts >/dev/null
+
+  # Accept either a short name (chi-01) or an FQDN (chi-01.example.com).
+  # Debian/Ubuntu want the FQDN first on the 127.0.1.1 line, then the short
+  # name — `hostname -f` reads that line, so getting the order wrong is how you
+  # end up with a box that cannot resolve its own fully-qualified name.
+  local fqdn short
+  fqdn="$name"
+  short="${name%%.*}"
+
+  # RFC 1123 labels: alphanumeric and hyphen, no leading/trailing hyphen, <=63
+  # chars each. hostnamectl rejects bad names anyway, but it does it AFTER
+  # /etc/hosts might already have been touched, and under `set -e` that aborts
+  # the whole run with an opaque error.
+  if [[ ! "$short" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
+    echo "Invalid hostname '$short' — letters, digits and hyphens only," >&2
+    echo "must not start or end with a hyphen, 63 characters max." >&2
+    exit 1
   fi
-  substep "Hostname set to '$name'"
+
+  log "Setting hostname to '$short'..."
+  sudo hostnamectl set-hostname "$short"
+
+  # Cloud images run cloud-init with preserve_hostname: false, which rewrites
+  # the hostname AND /etc/hosts on every boot. Without this the rename silently
+  # reverts at the first reboot and the box answers to its old name again.
+  if [[ -d /etc/cloud ]]; then
+    sudo mkdir -p /etc/cloud/cloud.cfg.d
+    printf 'preserve_hostname: true\n' \
+      | sudo tee /etc/cloud/cloud.cfg.d/99-preserve-hostname.cfg >/dev/null
+    substep "cloud-init told to preserve the hostname across reboots"
+  fi
+
+  # 127.0.0.1 must stay localhost; the system's own name belongs on 127.0.1.1.
+  # Debian policy uses that second loopback address precisely so the hostname
+  # keeps resolving on a machine with no permanent IP.
+  grep -qE '^127\.0\.0\.1[[:space:]]+.*\blocalhost\b' /etc/hosts \
+    || printf '127.0.0.1\tlocalhost\n' | sudo tee -a /etc/hosts >/dev/null
+
+  local line
+  if [[ "$fqdn" == *.* ]]; then
+    line=$(printf '127.0.1.1\t%s %s' "$fqdn" "$short")
+  else
+    line=$(printf '127.0.1.1\t%s' "$short")
+  fi
+
+  # Rewrite via awk rather than `sed s///` — the replacement text is
+  # user-supplied and sed would treat & and \ in it as metacharacters. mktemp
+  # rather than a $$-predictable path, since /tmp is world-writable.
+  local tmp
+  tmp=$(mktemp) || { echo "mktemp failed" >&2; exit 1; }
+  awk -v repl="$line" \
+    '/^127\.0\.1\.1/ { if (!done) { print repl; done=1 } ; next }
+     { print }
+     END { if (!done) print repl }' /etc/hosts > "$tmp"
+  # cp onto the existing file keeps /etc/hosts own mode and ownership.
+  sudo cp "$tmp" /etc/hosts
+  rm -f "$tmp"
+
+  substep "Hostname set to '$short'$([[ "$fqdn" == *.* ]] && echo " (FQDN $fqdn)")"
+  substep "/etc/hosts: $(grep '^127\.0\.1\.1' /etc/hosts | head -1)"
 }
 
 install_dev_packages() {
