@@ -2,8 +2,8 @@
 # Bootstrap a remote Linux dev server: clean zsh env + dev tooling + hardening.
 # Installs everything server.sh does, plus fnm/Node, Docker, and dev CLIs
 # (gh, direnv, bun, go, build-essential, jq, eza, btop), then applies base
-# hardening (key-only sshd, UFW SSH-only, sysctl, fail2ban, auto security
-# upgrades).
+# hardening (key-only sshd, sysctl, fail2ban, auto security upgrades, and UFW
+# SSH-only unless --no-firewall).
 #
 # Usage:
 #   bash <(curl -fsSL .../server-dev.sh)                       # no hostname change
@@ -13,6 +13,7 @@
 #   bash <(curl -fsSL .../server-dev.sh) --pnpm                # also install pnpm
 #   bash <(curl -fsSL .../server-dev.sh) --agent-setup         # +CLIs, plugins, skills, settings, Jira MCP
 #   bash <(curl -fsSL .../server-dev.sh) --chrome              # headless Chrome/Chromium for browser automation
+#   bash <(curl -fsSL .../server-dev.sh) --no-firewall         # skip UFW (a cloud firewall already fronts the host)
 #
 # (When piping via process substitution, flags go after the closing paren.)
 set -e
@@ -43,14 +44,24 @@ Flags:
                             the skills pack, curated settings, and pre-registers
                             the Atlassian (Jira) MCP
   --chrome                  install headless Chrome/Chromium for browser automation
+  --no-firewall             skip UFW entirely. Only for hosts already behind a
+                            provider firewall (security groups, VPC rules) that
+                            you can edit without logging into the box.
   -h, --help                show this help
 
 Always applied: dev toolchain (fnm + latest LTS Node, Docker, gh, direnv, bun,
 go, build-essential, jq, eza, btop), ~/Developer and ~/Downloads, and base
-hardening (key-only sshd, UFW SSH-only, sysctl, fail2ban, unattended upgrades).
+hardening (key-only sshd, sysctl, fail2ban, unattended upgrades) plus UFW
+default-deny with SSH-only unless --no-firewall is given.
 
 Password auth is only disabled once ~/.ssh/authorized_keys exists for the
 running user, so a keyless box is never locked out.
+
+Why --no-firewall exists: a firewall you can only edit from inside the box is
+also the one that can lock you out of it. Where the provider offers an
+out-of-band firewall, letting that be the single control keeps the way back in
+reachable from a browser. It is opt-in because on a host with no such firewall
+in front of it, skipping UFW leaves nothing at all.
 USAGE
 }
 
@@ -59,6 +70,7 @@ INSTALL_AI=""
 INSTALL_PNPM=""
 AGENT_SETUP=""
 INSTALL_CHROME=""
+SKIP_FIREWALL=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --hostname)    HOSTNAME_ARG="${2:-random}"; shift; [[ $# -gt 0 ]] && shift ;;
@@ -67,10 +79,11 @@ while [[ $# -gt 0 ]]; do
     --pnpm)        INSTALL_PNPM=1; shift ;;
     --agent-setup) AGENT_SETUP=1; shift ;;
     --chrome)      INSTALL_CHROME=1; shift ;;
+    --no-firewall) SKIP_FIREWALL=1; shift ;;
     -h|--help)     usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --hostname <name|random>, --ai, --pnpm, --agent-setup, --chrome, --help" >&2
+      echo "Try: --hostname <name|random>, --ai, --pnpm, --agent-setup, --chrome, --no-firewall, --help" >&2
       exit 1 ;;
   esac
 done
@@ -463,7 +476,13 @@ enable_fail2ban() {
 harden_server() {
   install_security_packages
   harden_sysctl
-  harden_firewall
+  if [[ -n "$SKIP_FIREWALL" ]]; then
+    substep "UFW SKIPPED (--no-firewall) — inbound is only filtered by whatever"
+    substep "       sits in front of this host. Verify with nmap from off-box;"
+    substep "       'ufw status' on an unconfigured host proves nothing."
+  else
+    harden_firewall
+  fi
   enable_unattended_upgrades
   enable_fail2ban
   # SSH last: if it fails validation it aborts here without having skipped the
