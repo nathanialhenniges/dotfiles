@@ -37,28 +37,28 @@ cat > "$TMP/h1" <<'EOF'
 ::1 ip6-localhost ip6-loopback
 ff02::1 ip6-allnodes
 EOF
-out=$(rewrite "$TMP/h1" "$(line_for chi-01)")
+out=$(rewrite "$TMP/h1" "$(line_for devbox)")
 check "replaces existing 127.0.1.1, keeps everything else" \
-  "$(printf '127.0.0.1 localhost\n127.0.1.1\tchi-01\n\n::1 ip6-localhost ip6-loopback\nff02::1 ip6-allnodes')" \
+  "$(printf '127.0.0.1 localhost\n127.0.1.1\tdevbox\n\n::1 ip6-localhost ip6-loopback\nff02::1 ip6-allnodes')" \
   "$out"
 check "exactly one 127.0.1.1 line remains" 1 "$(grep -c '^127\.0\.1\.1' <<<"$out")"
 check "IPv6 loopback entries survive" 1 "$(grep -c 'ip6-localhost' <<<"$out")"
 
 # --- no 127.0.1.1 line at all ---------------------------------------------
 printf '127.0.0.1 localhost\n' > "$TMP/h2"
-out=$(rewrite "$TMP/h2" "$(line_for chi-01)")
+out=$(rewrite "$TMP/h2" "$(line_for devbox)")
 check "appends when no 127.0.1.1 line exists" \
-  "$(printf '127.0.0.1 localhost\n127.0.1.1\tchi-01')" "$out"
+  "$(printf '127.0.0.1 localhost\n127.0.1.1\tdevbox')" "$out"
 
 # --- FQDN form: Debian wants FQDN first, then short ------------------------
-out=$(rewrite "$TMP/h1" "$(line_for chi-01.mrdemonwolf.com)")
+out=$(rewrite "$TMP/h1" "$(line_for devbox.example.com)")
 check "FQDN before short name (hostname -f reads this order)" \
-  "127.0.1.1	chi-01.mrdemonwolf.com chi-01" \
+  "127.0.1.1	devbox.example.com devbox" \
   "$(grep '^127\.0\.1\.1' <<<"$out")"
 
 # --- duplicate 127.0.1.1 lines collapse to one -----------------------------
 printf '127.0.0.1 localhost\n127.0.1.1 a\n127.0.1.1 b\n' > "$TMP/h3"
-out=$(rewrite "$TMP/h3" "$(line_for chi-01)")
+out=$(rewrite "$TMP/h3" "$(line_for devbox)")
 check "collapses duplicate 127.0.1.1 lines to one" 1 "$(grep -c '^127\.0\.1\.1' <<<"$out")"
 
 # --- sed-hostile characters ------------------------------------------------
@@ -68,7 +68,7 @@ check "ampersand is literal, not a sed backreference" "127.0.1.1	a&b" \
   "$(grep '^127\.0\.1\.1' <<<"$out")"
 
 # --- 127.0.0.1 is never clobbered -----------------------------------------
-out=$(rewrite "$TMP/h1" "$(line_for chi-01)")
+out=$(rewrite "$TMP/h1" "$(line_for devbox)")
 check "127.0.0.1 localhost untouched" "127.0.0.1 localhost" \
   "$(grep '^127\.0\.0\.1' <<<"$out")"
 

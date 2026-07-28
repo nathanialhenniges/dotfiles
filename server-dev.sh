@@ -129,7 +129,7 @@ set_hostname() {
     name="${WOLF_HOSTNAMES[$RANDOM % ${#WOLF_HOSTNAMES[@]}]}"
   fi
 
-  # Accept either a short name (chi-01) or an FQDN (chi-01.example.com).
+  # Accept either a short name (devbox) or an FQDN (devbox.example.com).
   # Debian/Ubuntu want the FQDN first on the 127.0.1.1 line, then the short
   # name — `hostname -f` reads that line, so getting the order wrong is how you
   # end up with a box that cannot resolve its own fully-qualified name.
