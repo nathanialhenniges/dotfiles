@@ -54,6 +54,12 @@ for file in $(find "$CONFIG_DIR" -type f -not -path "$CONFIG_DIR/server/*"); do
   echo "Installed $target"
 done
 
+# Make scripts executable
+if [ -d "$HOME/.scripts" ]; then
+  chmod +x "$HOME/.scripts/"*
+  echo "Made ~/.scripts/* executable"
+fi
+
 # Load Homebrew paths so fnm is available
 source ~/.zprofile 2>/dev/null
 

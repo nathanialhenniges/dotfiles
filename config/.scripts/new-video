@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+
+if [ -z "${1:-}" ]; then
+  echo "Usage: new-video <video-slug>"
+  echo "Example: new-video howling-web-dev-2026"
+  exit 1
+fi
+
+SLUG="$1"
+BASE="$HOME/Movies/Final Cut Projects/YouTube/$SLUG"
+
+if [ -d "$BASE" ]; then
+  echo "❌ Folder already exists: $BASE"
+  exit 1
+fi
+
+mkdir -p "$BASE"/{01_Raw,02_Audio,03_Project,04_Exports,05_Thumbnail}
+
+echo "✅ Created: $BASE"
+ls "$BASE"

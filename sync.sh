@@ -28,6 +28,12 @@ cp "$HOME/.config/ohmyposh/mrdemonwolf.omp.json" "$CONFIG_DIR/.config/ohmyposh/"
 mkdir -p "$CONFIG_DIR/.config/ghostty"
 cp "$HOME/Library/Application Support/com.mitchellh.ghostty/config" "$CONFIG_DIR/.config/ghostty/config" 2>/dev/null
 
+# Custom scripts
+if [ -d "$HOME/.scripts" ]; then
+  mkdir -p "$CONFIG_DIR/.scripts"
+  cp "$HOME/.scripts/"* "$CONFIG_DIR/.scripts/" 2>/dev/null && echo "Synced .scripts/"
+fi
+
 # Regenerate Brewfile
 brew bundle dump --force --file="$DOTFILES_DIR/Brewfile"
 echo "Brewfile updated"
