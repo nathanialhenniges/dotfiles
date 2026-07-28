@@ -1,0 +1,47 @@
+#!/bin/bash
+set -euo pipefail
+
+if [ -z "${1:-}" ]; then
+  echo "Usage: yt-video-backup <video-slug>"
+  echo "Example: yt-video-backup howling-web-dev-2026"
+  exit 1
+fi
+
+SLUG="$1"
+SOURCE="$HOME/Movies/Final Cut Projects/YouTube/$SLUG/"
+DEST="/Users/nathanialhenniges/Library/CloudStorage/GoogleDrive-nathanial.henniges@mrdemonwolf.com/My Drive/MultiMedia Projects/Social Media/YouTube/Video-Backups/$SLUG/"
+LOG="$HOME/Movies/.backup.log"
+
+if [ ! -d "$SOURCE" ]; then
+  echo "❌ Project not found: $SOURCE"
+  exit 1
+fi
+
+# Refuse to run if editing apps are open
+for app in "Final Cut Pro" "Motion" "Logic Pro" "Compressor"; do
+  if pgrep -x "$app" > /dev/null; then
+    echo "❌ $app is running. Close it before backing up."
+    exit 1
+  fi
+done
+
+echo "▶ Starting backup of '$SLUG' at $(date)" | tee -a "$LOG"
+
+mkdir -p "$DEST"
+
+rsync -av --delete \
+  --exclude='.DS_Store' \
+  --exclude='.lock-dir' \
+  --exclude='__Temp/' \
+  --exclude='Render Files/' \
+  --exclude='Transcoded Media/' \
+  --exclude='Proxy Media/' \
+  --exclude='Analysis Files/' \
+  --exclude='Peaks Data/' \
+  --exclude='Thumbnail Media/' \
+  --exclude='Undo Data.nosync/' \
+  --exclude='*.nosync' \
+  --exclude='anydesk/' \
+  "$SOURCE" "$DEST" 2>&1 | tee -a "$LOG"
+
+echo "✅ Backup of '$SLUG' complete at $(date)" | tee -a "$LOG"

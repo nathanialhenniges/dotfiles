@@ -153,7 +153,7 @@ dotfiles/
 │   │   │   └── skills/        # Skills pack copied to ~/.claude/skills/
 │   │   └── codex/
 │   │       └── config.toml    # Linux-safe Codex config
-│   ├── scripts/               # Custom scripts copied to ~/.scripts/
+│   ├── .scripts/              # Custom scripts copied to ~/.scripts/
 │   └── .config/
 │       ├── ghostty/
 │       │   └── config                # Ghostty terminal config (Liquid Glass)
