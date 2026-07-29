@@ -323,10 +323,39 @@ from the `name` field in that repo's
 `expo-plugins`. `AGENT_PLUGINS` entries are checked against those
 aliases before anything is installed.
 
-Known upstream breakage: `expo/skills` currently fails to add at
-all. It carries a git submodule pointing at a private repo, so the
-clone aborts and no expo plugin can install. Nothing to fix on
-this side.
+#### The submodule fallback
+
+`expo/skills` can't be added the normal way. It carries a git
+submodule pointing at `expo/eval-experiments`, which is private
+(added in expo/skills#105 for Expo's own eval CI — no use to anyone
+installing the plugin). Claude Code clones marketplaces with
+`--recurse-submodules`, so the clone aborts and nothing registers.
+Codex doesn't recurse, which is why codex installs the same repo
+without complaint. Tracked upstream in expo/skills#110.
+
+When a marketplace add fails, the script retries once by cloning
+the repo with `--no-recurse-submodules` into
+`~/.local/share/claude-marketplaces/` and adding *that directory*.
+Same alias, same plugins. You'll see:
+
+```
+    FAILED  claude marketplace expo/skills
+            fatal: clone of '.../eval-experiments.git' into submodule path ... failed
+    claude marketplace expo/skills (via submodule-free local clone)
+    claude plugin expo@expo-plugins
+```
+
+The `FAILED` line stays — it's what actually happened — but the
+step is dropped from the closing failure summary, because it was
+repaired. Reporting a fixed step as failed is the same lie as
+reporting a failed step as fine, just pointing the other way.
+
+This only runs *after* the normal add has failed, so the day Expo
+drops the submodule the ordinary path wins and the fallback goes
+dormant on its own. Nothing to remember to undo.
+`extraKnownMarketplaces` in `settings.json` still names the GitHub
+source deliberately — that's the intent; the local clone is the
+workaround, not the goal.
 
 **Jira/Atlassian needs a one-time OAuth login** — it can't be
 provisioned headlessly. See
