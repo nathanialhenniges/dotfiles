@@ -291,6 +291,11 @@ so it picks up any change to the plugin list.
 Use it to retry installs that failed, or to pick up a plugin added
 to the arrays since the box was built, without a full rebuild.
 
+It refuses to run on a box that was never provisioned — with no
+Node there is nothing to install the CLIs with, so it would copy
+the settings and skills and then skip every plugin, leaving a box
+that looks configured and isn't. Use `--agent-setup` there.
+
 **None of it requires being logged in to Claude Code.** Marketplace
 adds are `git clone` and installs are file copies — no call reaches
 the Anthropic API, so plugins install fine on a box that has never
