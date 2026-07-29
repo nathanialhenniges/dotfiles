@@ -160,6 +160,94 @@ install_dev_packages() {
   fi
 }
 
+# Parity with the MacBook Brewfile. Everything in here is best-effort by design:
+# these are conveniences, and a GitHub release 404 or an upstream rename must not
+# be able to abort a provisioning run. That failure mode is not hypothetical — a
+# single `cd` error once took down the entire toolchain after hardening had
+# already completed, and the box looked finished.
+#
+# Deliberately NOT here: ansible. chi-01 must never enter the Ansible inventory,
+# and putting the tool on the box invites the no---limit run that rule exists to
+# prevent. It stays on the laptop.
+install_extra_clis() {
+  log "Installing extra CLIs..."
+
+  # ncdu, gnupg and ffmpeg are straightforward. rclone's apt build lags brew's
+  # by a lot, but handles S3/R2/Drive fine, and the repo already carries two
+  # unpinned `curl | bash` root fetches without needing a third.
+  sudo apt install -y ncdu gnupg ffmpeg rclone || substep "some apt extras failed, continuing"
+
+  local deb_arch tmp
+  deb_arch="$(dpkg --print-architecture)"   # arm64 | amd64
+
+  # yt-dlp: apt's build is over a year stale, and yt-dlp breaks every time
+  # YouTube changes something — a stale one is a broken one. The official binary
+  # updates itself with `yt-dlp -U`.
+  if ! command -v yt-dlp &>/dev/null; then
+    substep "Installing yt-dlp..."
+    local ytdlp_asset="yt-dlp_linux"
+    [[ "$deb_arch" == "arm64" ]] && ytdlp_asset="yt-dlp_linux_aarch64"
+    if sudo curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/${ytdlp_asset}" \
+         -o /usr/local/bin/yt-dlp; then
+      sudo chmod +x /usr/local/bin/yt-dlp
+    else
+      substep "yt-dlp download failed, skipping"
+    fi
+  fi
+
+  # fastfetch is not packaged for noble at all.
+  if ! command -v fastfetch &>/dev/null; then
+    substep "Installing fastfetch..."
+    local ff_asset="fastfetch-linux-amd64.deb"
+    [[ "$deb_arch" == "arm64" ]] && ff_asset="fastfetch-linux-aarch64.deb"
+    tmp="$(mktemp -d)"
+    curl -fsSL "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/${ff_asset}" \
+      -o "$tmp/fastfetch.deb" \
+      && sudo apt install -y "$tmp/fastfetch.deb" \
+      || substep "fastfetch install failed, skipping"
+    rm -rf "$tmp"
+  fi
+
+  # awscli v2 has no apt candidate on noble. Installs to /usr/local/aws-cli with
+  # symlinks in /usr/local/bin; removal is manual.
+  if ! command -v aws &>/dev/null; then
+    substep "Installing awscli..."
+    local aws_arch="x86_64"
+    [[ "$deb_arch" == "arm64" ]] && aws_arch="aarch64"
+    tmp="$(mktemp -d)"
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${aws_arch}.zip" -o "$tmp/awscli.zip" \
+      && unzip -q "$tmp/awscli.zip" -d "$tmp" \
+      && sudo "$tmp/aws/install" --update \
+      || substep "awscli install failed, skipping"
+    rm -rf "$tmp"
+  fi
+
+  # terraform via HashiCorp's apt repo — same keyring pattern as the gh block.
+  # Needs gnupg for --dearmor, which is why the apt line above runs first.
+  if ! command -v terraform &>/dev/null; then
+    substep "Adding HashiCorp apt repo..."
+    sudo mkdir -p -m 755 /etc/apt/keyrings
+    if curl -fsSL https://apt.releases.hashicorp.com/gpg \
+         | sudo gpg --dearmor --yes -o /etc/apt/keyrings/hashicorp.gpg; then
+      sudo chmod go+r /etc/apt/keyrings/hashicorp.gpg
+      # shellcheck disable=SC1091
+      echo "deb [arch=${deb_arch} signed-by=/etc/apt/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com $(. /etc/os-release && echo "$VERSION_CODENAME") main" \
+        | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
+      sudo apt update && sudo apt install -y terraform || substep "terraform install failed, skipping"
+    else
+      substep "HashiCorp key fetch failed, skipping terraform"
+    fi
+  fi
+
+  # act runs GitHub Actions locally, in the Docker this script already installs.
+  if ! command -v act &>/dev/null; then
+    substep "Installing act..."
+    curl -fsSL https://raw.githubusercontent.com/nektos/act/master/install.sh \
+      | sudo bash -s -- -b /usr/local/bin \
+      || substep "act install failed, skipping"
+  fi
+}
+
 install_go() {
   # ponytail: distro Go can lag; upgrade path = official tarball from go.dev/dl.
   log "Installing Go..."
@@ -470,6 +558,7 @@ copy_configs "$DOTFILES_DIR/config/server"
 
 # Dev tooling
 install_dev_packages
+install_extra_clis
 install_go
 install_bun
 install_fnm_node

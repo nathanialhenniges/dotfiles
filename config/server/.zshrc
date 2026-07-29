@@ -48,6 +48,9 @@ zstyle ':completion:*' menu no
 zstyle ':completion:*:descriptions' format '[%d]'
 zstyle ':fzf-tab:*' switch-group ',' '.'
 zstyle ':fzf-tab:*' fzf-flags --bind=tab:accept
+# Directory preview on `cd <TAB>`. eza is tolerated-absent on pre-24.04, so guard it.
+command -v eza &>/dev/null && \
+  zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath'
 
 # ── History search with arrow keys ─────────────────────────
 bindkey "^[[A" history-search-backward
@@ -62,6 +65,22 @@ command -v fnm &>/dev/null && eval "$(fnm env --use-on-cd --shell zsh)"
 # The bun installer writes its own PATH block to ~/.bashrc, never ~/.zshrc,
 # so on a zsh box bun is installed but invisible without this.
 [[ -d "$HOME/.bun/bin" ]] && export PATH="$HOME/.bun/bin:$PATH"
+
+# ── Go — active only if installed ──────────────────────────
+# `go install` drops binaries in $GOPATH/bin, which is on nobody's PATH by
+# default. Without this the tool installs fine and then cannot be run.
+if command -v go &>/dev/null; then
+  export GOPATH="$HOME/go"
+  export PATH="$GOPATH/bin:$PATH"
+fi
+
+# ── direnv — active only if installed ──────────────────────
+# server-dev.sh installs direnv but nothing ever hooked it, so .envrc files sat
+# there doing nothing.
+command -v direnv &>/dev/null && eval "$(direnv hook zsh)"
+
+# ── gh completion — active only if installed ───────────────
+command -v gh &>/dev/null && eval "$(gh completion -s zsh)"
 
 # ── Secrets (API tokens, etc.) ─────────────────────────────
 [[ -f ~/.secrets ]] && source ~/.secrets

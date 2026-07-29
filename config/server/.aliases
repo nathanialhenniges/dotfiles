@@ -1,2 +1,23 @@
 # Server-specific aliases
 # Add your aliases here and re-run server.sh to update.
+#
+# Deliberately short. Oh My Zsh already gives you ll/la/l and the git plugin
+# gives gst/gco/gp and friends — re-defining those here would just be drift.
+# Only what omz does NOT cover belongs in this file.
+#
+# Nothing from the Mac's config/.aliases is copied over: hotspotFix/hotspotUnfix
+# use BSD net.inet.* sysctl MIBs that do not exist on Linux, markedit shells out
+# to `open -a`, movtogif/towebmp4 use Apple VideoToolbox encoders, and the three
+# ~/.scripts aliases point at scripts that are never copied to a server.
+
+# ── eza — only if installed (tolerated-absent on pre-24.04) ─
+if command -v eza &>/dev/null; then
+  alias ls='eza --icons --group-directories-first'
+  alias ll='eza -lh --icons --group-directories-first --git'
+  alias la='eza -lah --icons --group-directories-first --git'
+  alias lt='eza --tree --level=2 --icons --group-directories-first'
+fi
+
+# ── Claude Code ────────────────────────────────────────────
+# Same alias as the Mac. Only useful where --ai / --agent-setup ran.
+command -v claude &>/dev/null && alias yolo='claude --dangerously-skip-permissions'
