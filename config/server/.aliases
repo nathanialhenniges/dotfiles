@@ -19,5 +19,9 @@ if command -v eza &>/dev/null; then
 fi
 
 # ── Claude Code ────────────────────────────────────────────
-# Same alias as the Mac. Only useful where --ai / --agent-setup ran.
-command -v claude &>/dev/null && alias yolo='claude --dangerously-skip-permissions'
+# Same alias as the Mac. Intentionally NOT guarded on `command -v claude`:
+# .zshrc sources this file well before it sets up fnm, and claude lives in fnm's
+# per-shell bin dir — so the guard is always false here and the alias never gets
+# defined. An alias pointing at a missing command is harmless; it fails only if
+# you run it on a box where --ai never ran.
+alias yolo='claude --dangerously-skip-permissions'
