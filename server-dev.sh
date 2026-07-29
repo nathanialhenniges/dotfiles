@@ -230,14 +230,26 @@ install_docker() {
 # GitHub-shorthand marketplaces + plugins, shared by both Claude Code and Codex
 # (both take `plugin marketplace add owner/repo` and `plugin (install|add)
 # name@marketplace`, so the same set installs into each).
+#
+# Entries are `owner/repo=alias`. The alias is NOT derived from the repo name —
+# it comes from the "name" field in that repo's .claude-plugin/marketplace.json,
+# and the two differ often enough to matter: expo/skills registers as
+# `expo-plugins`. Writing the alias down here is what lets agent_plugin_preflight
+# catch an AGENT_PLUGINS entry pointing at a marketplace nothing registers.
 AGENT_MARKETPLACES=(
-  anthropics/claude-plugins-official
-  JuliusBrussee/caveman
-  DietrichGebert/ponytail
-  mksglu/context-mode
-  elvismdev/claude-wordpress-skills
-  expo/skills
-  tsanva/cc-discord-presence
+  anthropics/claude-plugins-official=claude-plugins-official
+  JuliusBrussee/caveman=caveman
+  DietrichGebert/ponytail=ponytail
+  mksglu/context-mode=context-mode
+  elvismdev/claude-wordpress-skills=claude-wordpress-skills
+  # KNOWN BROKEN UPSTREAM (checked 2026-07-29): adding this fails, and so does
+  # every expo plugin under it. expo/skills carries a submodule `eval-harness`
+  # pointing at github.com/expo/eval-experiments, which is private or gone, and
+  # the CLI clones marketplaces with submodules — so the clone aborts and the
+  # marketplace never registers. Nothing to fix on our side; kept here so it
+  # starts working the moment upstream drops the submodule. The run now says so
+  # out loud instead of shrugging.
+  expo/skills=expo-plugins
 )
 AGENT_PLUGINS=(
   atlassian@claude-plugins-official
@@ -248,9 +260,62 @@ AGENT_PLUGINS=(
   ponytail@ponytail
   context-mode@context-mode
   claude-wordpress-skills@claude-wordpress-skills
-  expo-deployment@expo-plugins
-  upgrading-expo@expo-plugins
+  # `expo-deployment` and `upgrading-expo` are deprecated upstream aliases that
+  # both resolve to ./plugins/expo — installing them got you the same plugin
+  # twice under two dead names.
+  expo@expo-plugins
 )
+
+# Every failed marketplace/plugin step, replayed at the end of agent_setup.
+AGENT_SETUP_FAILURES=()
+
+# Runs one plugin/marketplace command and reports what actually happened.
+#
+# The old form was `cmd &>/dev/null || substep "... (already installed or
+# unavailable)"`, which collapsed "no-op, you already have this" and "this is
+# broken and you do not have it" into one reassuring line. That is how the expo
+# marketplace failure survived a whole provisioning run on chi-01: the add
+# failed, both installs under it failed as a consequence, and the log said
+# nothing a person would stop on. Exit status alone can't separate the two
+# either — both are non-zero — so match the output.
+agent_try() { # <description> <command...>
+  local what=$1; shift
+  # `rc`, not `status` — that name is a read-only special in zsh, and these
+  # helpers get eval'd out of this file by tests and by hand.
+  local out rc=0 flat
+  out=$("$@" 2>&1) || rc=$?
+  if (( rc == 0 )); then
+    substep "$what"
+  elif grep -qiE 'already (installed|added|exists|present)|is already' <<<"$out"; then
+    substep "$what (already present)"
+  else
+    # These tools spew a whole git clone transcript, and the reason lands at the
+    # END of it — a naive head-of-output would show a progress bar and a temp
+    # path, which hides the error about as well as /dev/null did. Drop the
+    # progress noise, keep the last few lines, flatten, cap.
+    flat=$(printf '%s\n' "$out" \
+      | grep -avE 'Updating files|Receiving objects|Resolving deltas|Cloning into|remote: (Counting|Compressing|Enumerating|Total)' \
+      | tail -n 3 | tr '\n' ' ' | tr -s ' ') || flat=$(tr '\n' ' ' <<<"$out")
+    substep "FAILED  $what"
+    substep "        ${flat:0:240}"
+    AGENT_SETUP_FAILURES+=("$what")
+  fi
+}
+
+# Catches an AGENT_PLUGINS entry whose @marketplace nothing in
+# AGENT_MARKETPLACES registers. That mismatch is unfixable at install time and
+# silent at runtime, so check it before touching the box.
+agent_plugin_preflight() {
+  local known=" " m p rc=0
+  for m in "${AGENT_MARKETPLACES[@]}"; do known+="${m##*=} "; done
+  for p in "${AGENT_PLUGINS[@]}"; do
+    if [[ "$known" != *" ${p##*@} "* ]]; then
+      substep "BUG: $p names marketplace '${p##*@}', which AGENT_MARKETPLACES never registers"
+      rc=1
+    fi
+  done
+  return $rc
+}
 
 install_chrome() {
   # Headless browser for automation/screenshots (Playwright, Puppeteer,
@@ -296,19 +361,21 @@ agent_setup() {
   substep "settings.json + $(ls -1 "$agent_dir/claude/skills" | wc -l | tr -d ' ') skills installed"
 
   local m p
+  agent_plugin_preflight || substep "^ fix the arrays in server-dev.sh; installing the rest anyway"
+
   # Claude Code plugins — add each marketplace, then install each plugin.
   if command -v claude &>/dev/null; then
     log "Adding Claude Code plugin marketplaces..."
     for m in "${AGENT_MARKETPLACES[@]}"; do
-      claude plugin marketplace add "$m" &>/dev/null || substep "claude marketplace $m (already added or unavailable)"
+      agent_try "claude marketplace ${m%%=*}" claude plugin marketplace add "${m%%=*}"
     done
     log "Installing Claude Code plugins..."
     for p in "${AGENT_PLUGINS[@]}"; do
-      claude plugin install "$p" &>/dev/null || substep "claude plugin $p (already installed or unavailable)"
+      agent_try "claude plugin $p" claude plugin install "$p"
     done
     # Pre-register the Atlassian (Jira) MCP — OAuth login is manual, see docs.
-    claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp &>/dev/null \
-      || substep "atlassian MCP (already added or unavailable)"
+    agent_try "atlassian MCP" \
+      claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp
   else
     substep "claude CLI missing — skipped plugins + Jira MCP"
   fi
@@ -324,11 +391,11 @@ agent_setup() {
   if command -v codex &>/dev/null; then
     log "Adding Codex plugin marketplaces (same as Claude)..."
     for m in "${AGENT_MARKETPLACES[@]}"; do
-      codex plugin marketplace add "$m" &>/dev/null || substep "codex marketplace $m (already added or unavailable)"
+      agent_try "codex marketplace ${m%%=*}" codex plugin marketplace add "${m%%=*}"
     done
     log "Installing Codex plugins..."
     for p in "${AGENT_PLUGINS[@]}"; do
-      codex plugin add "$p" &>/dev/null || substep "codex plugin $p (unavailable — install manually)"
+      agent_try "codex plugin $p" codex plugin add "$p"
     done
   else
     substep "codex CLI missing — skipped codex plugins"
@@ -336,6 +403,14 @@ agent_setup() {
 
   substep "Agent setup done. Jira/Atlassian needs a one-time OAuth login —"
   substep "  see $DOTFILES_DIR/docs/jira-mcp-setup.md (claude: /mcp; codex: first run)."
+
+  if (( ${#AGENT_SETUP_FAILURES[@]} > 0 )); then
+    echo ""
+    echo "==> ${#AGENT_SETUP_FAILURES[@]} agent-setup step(s) FAILED — the rest of the box is fine:"
+    printf '      - %s\n' "${AGENT_SETUP_FAILURES[@]}"
+    echo "    Re-run those by hand to see the full error, e.g."
+    echo "      claude plugin marketplace add <owner/repo>"
+  fi
 }
 
 # ── Run ──────────────────────────────────────────────────────────────────────

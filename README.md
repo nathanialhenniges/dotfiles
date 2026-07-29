@@ -275,6 +275,28 @@ Replicates the Claude Code + Codex setup on the box (implies
 Existing `settings.json` / `config.toml` are backed up to
 `*.backup` first.
 
+#### When a plugin doesn't install
+
+Marketplace and plugin steps print `FAILED` plus the actual error,
+and the end of `--agent-setup` lists everything that failed. A
+plugin you already have is reported as `(already present)` and is
+not a failure. Nothing about the plugin step is silent — an
+earlier version swallowed all of it into one "already installed or
+unavailable" line, and a provisioning run reported success while
+installing nothing.
+
+The marketplace list in `server-dev.sh` is written as
+`owner/repo=alias`. The alias is **not** the repo name — it comes
+from the `name` field in that repo's
+`.claude-plugin/marketplace.json`, and `expo/skills` registers as
+`expo-plugins`. `AGENT_PLUGINS` entries are checked against those
+aliases before anything is installed.
+
+Known upstream breakage: `expo/skills` currently fails to add at
+all. It carries a git submodule pointing at a private repo, so the
+clone aborts and no expo plugin can install. Nothing to fix on
+this side.
+
 **Jira/Atlassian needs a one-time OAuth login** — it can't be
 provisioned headlessly. See
 [docs/jira-mcp-setup.md](docs/jira-mcp-setup.md).
