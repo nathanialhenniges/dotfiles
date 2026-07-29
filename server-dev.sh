@@ -41,6 +41,7 @@ set -e
 set -o pipefail
 
 REPO_URL="https://github.com/nathanialhenniges/dotfiles.git"
+RAW_URL="https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/server-dev.sh"
 DOTFILES_DIR="$HOME/dotfiles"
 
 # Parse flags.
@@ -73,23 +74,31 @@ Flags:
   --agent-setup             implies --ai; also installs plugins into both CLIs,
                             the skills pack, curated settings, and pre-registers
                             the Atlassian (Jira) MCP
+  --agent-setup-only        run ONLY the --agent-setup step on a box this script
+                            already provisioned — no apt, no Docker, no shell
+                            changes. For re-running plugin installs that failed
+                            (the run prints which ones) without a full rebuild.
   --chrome                  install headless Chrome/Chromium for browser automation
   -h, --help                show this help
 
 Always applied: dev toolchain (fnm + latest LTS Node, Docker, gh, direnv, bun,
 go, build-essential, jq, eza, btop), plus ~/Developer and ~/Downloads.
+(--agent-setup-only skips all of that by design.)
 USAGE
 }
 
 INSTALL_AI=""
 INSTALL_PNPM=""
 AGENT_SETUP=""
+AGENT_SETUP_ONLY=""
 INSTALL_CHROME=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ai)          INSTALL_AI=1; shift ;;
     --pnpm)        INSTALL_PNPM=1; shift ;;
     --agent-setup) AGENT_SETUP=1; shift ;;
+    # Implies --agent-setup: asking for only that step is asking for that step.
+    --agent-setup-only) AGENT_SETUP=1; AGENT_SETUP_ONLY=1; shift ;;
     --chrome)      INSTALL_CHROME=1; shift ;;
     -h|--help)     usage; exit 0 ;;
     --hostname|--hostname=*|--no-firewall)
@@ -102,7 +111,7 @@ while [[ $# -gt 0 ]]; do
       exit 1 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --ai, --pnpm, --agent-setup, --chrome, --help" >&2
+      echo "Try: --ai, --pnpm, --agent-setup, --agent-setup-only, --chrome, --help" >&2
       exit 1 ;;
   esac
 done
@@ -181,6 +190,20 @@ install_fnm_node() {
   eval "$(fnm env)"
   fnm use default &>/dev/null || true
   substep "Node.js $(node --version 2>/dev/null) (LTS) set as default"
+}
+
+# Put an ALREADY-installed fnm/Node on PATH, installing and upgrading nothing.
+#
+# --agent-setup-only skips install_fnm_node, and on a provisioned box the
+# toolchain is activated from .zshrc — so under bash `claude` and `node` do not
+# resolve even though they are installed. Without this, agent_setup would decide
+# the CLIs are missing and reinstall them, which is the opposite of "only".
+activate_existing_node() {
+  export PATH="$HOME/.local/share/fnm:$PATH"
+  if command -v fnm &>/dev/null; then
+    eval "$(fnm env)" || true
+    fnm use default &>/dev/null || true
+  fi
 }
 
 # Echo an npm-global command: direct npm, else via fnm's default node, else empty.
@@ -408,7 +431,10 @@ agent_setup() {
     echo ""
     echo "==> ${#AGENT_SETUP_FAILURES[@]} agent-setup step(s) FAILED — the rest of the box is fine:"
     printf '      - %s\n' "${AGENT_SETUP_FAILURES[@]}"
-    echo "    Re-run those by hand to see the full error, e.g."
+    echo "    None of this needs you to be logged in — these are git clones, not"
+    echo "    API calls. To retry just this step, without rebuilding the box:"
+    echo "      bash <(curl -fsSL $RAW_URL) --agent-setup-only"
+    echo "    Or re-run one by hand to see its full error, e.g."
     echo "      claude plugin marketplace add <owner/repo>"
   fi
 }
@@ -419,6 +445,17 @@ detect_os
 if [[ "$OS" == "Darwin" ]]; then
   echo "==> server-dev.sh is Linux-only. On macOS use ./install.sh (Brewfile + OrbStack)."
   exit 1
+fi
+
+# --agent-setup-only: the agent step and nothing else. No apt, no Docker, no
+# chsh, no dotfile copies. Meant for a box this script already provisioned —
+# typically to retry plugin installs that failed the first time.
+if [[ -n "$AGENT_SETUP_ONLY" ]]; then
+  activate_existing_node
+  agent_setup
+  echo ""
+  echo "==> Agent setup done. Nothing else was touched (--agent-setup-only)."
+  exit 0
 fi
 
 # Home directory layout
@@ -459,5 +496,12 @@ echo "    - Log out and back in for Docker group membership to apply."
 echo "    - Run 'gh auth login' to authenticate the GitHub CLI."
 echo "      To scope gh to a single org, use a fine-grained PAT:"
 echo "      gh auth login --with-token < token.txt   (see README)"
+if [[ -n "$AGENT_SETUP" ]]; then
+echo "    - Run 'claude' once to log in to your Claude Code account. Plugins are"
+echo "      already installed — they are git clones and need no login — so this"
+echo "      is only about signing in. To redo the plugin step later (say, after"
+echo "      a marketplace that was down comes back), re-run just that step:"
+echo "      bash <(curl -fsSL $RAW_URL) --agent-setup-only"
+fi
 echo "    - Reach dev app ports from your laptop with SSH forwarding, e.g.:"
 echo "      ssh -L 3000:localhost:3000 $USER@<this-box>   (see README)"

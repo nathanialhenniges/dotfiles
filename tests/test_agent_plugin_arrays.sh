@@ -128,6 +128,30 @@ else
   echo "  SKIP  settings.json cross-check (needs python3)"
 fi
 
+echo "== --agent-setup-only parses and stops early =="
+# The flag is only useful if it (a) implies --agent-setup, so the step it names
+# actually runs, and (b) exits before create_home_dirs — "only" has to mean only.
+flags=$(bash -c '
+  set -e
+  set -- --agent-setup-only          # the parser reads $@, so seed it first
+  usage() { :; }
+  eval "$(awk "/^INSTALL_AI=\"\"/,/^done\$/" "$0")"
+  echo "AGENT_SETUP=$AGENT_SETUP AGENT_SETUP_ONLY=$AGENT_SETUP_ONLY"
+' "$SCRIPT" 2>&1) || flags="parse failed: $flags"
+check "--agent-setup-only implies --agent-setup" "AGENT_SETUP=1 AGENT_SETUP_ONLY=1" "$flags"
+
+check "only-branch exits before the full run" "yes" \
+  "$(awk '/^if \[\[ -n "\$AGENT_SETUP_ONLY" \]\]; then/,/^fi/' "$SCRIPT" | grep -q 'exit 0' && echo yes || echo no)"
+check "only-branch runs before create_home_dirs" "yes" \
+  "$([[ $(grep -n 'AGENT_SETUP_ONLY" \]\]; then' "$SCRIPT" | tail -1 | cut -d: -f1) -lt \
+      $(grep -n '^create_home_dirs' "$SCRIPT" | tail -1 | cut -d: -f1) ]] && echo yes || echo no)"
+
+# The flag is advertised in three places; a flag nobody can discover is a flag
+# nobody uses.
+check "listed in --help"        "yes" "$(grep -q -- '--agent-setup-only        run ONLY' "$SCRIPT" && echo yes || echo no)"
+check "listed in unknown-opt hint" "yes" "$(grep -q -- 'Try: --ai, --pnpm, --agent-setup, --agent-setup-only' "$SCRIPT" && echo yes || echo no)"
+check "offered in the failure summary" "yes" "$(grep -q 'RAW_URL) --agent-setup-only' "$SCRIPT" && echo yes || echo no)"
+
 echo ""
 echo "  $pass passed, $fail failed"
 [[ $fail -eq 0 ]]

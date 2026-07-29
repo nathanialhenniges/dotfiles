@@ -234,6 +234,9 @@ bash <(curl -fsSL .../server-dev.sh) --pnpm
 # full agent setup: CLIs + plugins + skills + settings + Jira MCP
 bash <(curl -fsSL .../server-dev.sh) --agent-setup
 
+# redo ONLY the agent step on a box that's already provisioned
+bash <(curl -fsSL .../server-dev.sh) --agent-setup-only
+
 # headless Chrome/Chromium for browser automation + screenshots
 bash <(curl -fsSL .../server-dev.sh) --chrome
 ```
@@ -274,6 +277,27 @@ Replicates the Claude Code + Codex setup on the box (implies
 
 Existing `settings.json` / `config.toml` are backed up to
 `*.backup` first.
+
+#### Re-running just this step (`--agent-setup-only`)
+
+```bash
+bash <(curl -fsSL .../server-dev.sh) --agent-setup-only
+```
+
+Runs `--agent-setup` and nothing else — no apt, no Docker, no
+`chsh`, no dotfile copies. It still pulls the dotfiles repo first,
+so it picks up any change to the plugin list.
+
+Use it to retry installs that failed, or to pick up a plugin added
+to the arrays since the box was built, without a full rebuild.
+
+**None of it requires being logged in to Claude Code.** Marketplace
+adds are `git clone` and installs are file copies — no call reaches
+the Anthropic API, so plugins install fine on a box that has never
+been signed in. Log in whenever you like; it's unrelated. It also
+does not activate a shell for you, so it puts an already-installed
+fnm/Node on `PATH` itself rather than reinstalling the CLIs it
+can't see.
 
 #### When a plugin doesn't install
 
