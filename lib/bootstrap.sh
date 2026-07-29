@@ -85,6 +85,12 @@ copy_configs() {
 set_default_shell() {
   if [[ "$SHELL" != *"zsh"* ]]; then
     log "Changing default shell to zsh..."
-    chsh -s "$(which zsh)"
+    local zsh_path
+    zsh_path="$(command -v zsh)"
+    # Unprivileged chsh authenticates the caller through PAM, which fails for a
+    # cloud account created with --disabled-password. That is the normal state
+    # of a freshly provisioned server user, so the plain call always loses
+    # there. sudo chsh edits /etc/passwd directly and does not prompt.
+    chsh -s "$zsh_path" 2>/dev/null || sudo chsh -s "$zsh_path" "$(id -un)"
   fi
 }
