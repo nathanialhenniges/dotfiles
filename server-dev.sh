@@ -529,17 +529,46 @@ agent_setup() {
   fi
 
   # Codex: Linux-safe config.toml (drops macOS-only servers).
+  #
+  # Write it ONLY when it does not already exist. `codex plugin marketplace add`
+  # records its marketplaces *inside* this same file, so copying the pristine
+  # repo copy over the top silently deletes every registration the previous run
+  # made. The failure is nasty because it is not visible here: the marketplace
+  # snapshots under ~/.codex/plugins/cache survive, so the next `marketplace add`
+  # refuses with "already added from a different source" while
+  # `marketplace list` reports "No plugin marketplaces in scope" — and every
+  # single `codex plugin add` then fails with "not found in marketplace".
+  #
+  # Observed on chi-01: config.toml byte-identical to the repo copy, cache full
+  # of marketplaces, 10 of 11 agent-setup failures traced to exactly this.
+  #
+  # Cost of this fix: repo edits to config.toml no longer reach a box that
+  # already has one. That is the right trade — the file is model/effort/MCP
+  # settings that rarely change, against silently breaking every codex plugin.
   log "Installing Codex config..."
   mkdir -p "$HOME/.codex"
-  [[ -f "$HOME/.codex/config.toml" ]] && cp "$HOME/.codex/config.toml" "$HOME/.codex/config.toml.backup"
-  cp "$agent_dir/codex/config.toml" "$HOME/.codex/config.toml"
+  if [[ -f "$HOME/.codex/config.toml" ]]; then
+    substep "$HOME/.codex/config.toml exists, leaving it alone (it holds your marketplaces)"
+    substep "delete it and re-run to take the repo copy"
+  else
+    cp "$agent_dir/codex/config.toml" "$HOME/.codex/config.toml"
+  fi
 
   # Codex plugins — same Git marketplaces + plugin set as Claude (Codex takes
   # `plugin marketplace add owner/repo` and `plugin add name@marketplace`).
   if command -v codex &>/dev/null; then
     log "Adding Codex plugin marketplaces (same as Claude)..."
     for m in "${AGENT_MARKETPLACES[@]}"; do
-      agent_try "codex marketplace ${m%%=*}" codex plugin marketplace add "${m%%=*}"
+      # Self-heal for boxes provisioned before the config.toml clobber was
+      # fixed: their registrations were wiped but ~/.codex/plugins/cache
+      # survived, so `add` refuses with "already added from a different source"
+      # while `marketplace list` shows nothing. `remove` clears the stale cache
+      # entry and lets the add land. No-op on a healthy box, because the add
+      # only fails there for real reasons (see expo/skills).
+      if ! codex plugin marketplace add "${m%%=*}" &>/dev/null; then
+        codex plugin marketplace remove "${m##*=}" &>/dev/null || true
+        agent_try "codex marketplace ${m%%=*}" codex plugin marketplace add "${m%%=*}"
+      fi
     done
     log "Installing Codex plugins..."
     for p in "${AGENT_PLUGINS[@]}"; do
