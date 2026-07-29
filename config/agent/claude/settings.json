@@ -35,10 +35,9 @@
     "claude-wordpress-skills@claude-wordpress-skills": true,
     "coderabbit@claude-plugins-official": true,
     "context-mode@context-mode": true,
-    "expo-deployment@expo-plugins": true,
+    "expo@expo-plugins": true,
     "frontend-design@claude-plugins-official": true,
     "swift-lsp@claude-plugins-official": true,
-    "upgrading-expo@expo-plugins": true,
     "ponytail@ponytail": true
   },
   "extraKnownMarketplaces": {
@@ -48,16 +47,22 @@
         "repo": "JuliusBrussee/caveman"
       }
     },
-    "cc-discord-presence": {
+    "claude-wordpress-skills": {
       "source": {
         "source": "github",
-        "repo": "tsanva/cc-discord-presence"
+        "repo": "elvismdev/claude-wordpress-skills"
       }
     },
     "context-mode": {
       "source": {
         "source": "github",
         "repo": "mksglu/context-mode"
+      }
+    },
+    "expo-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "expo/skills"
       }
     },
     "ponytail": {

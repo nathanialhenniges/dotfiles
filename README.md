@@ -234,6 +234,9 @@ bash <(curl -fsSL .../server-dev.sh) --pnpm
 # full agent setup: CLIs + plugins + skills + settings + Jira MCP
 bash <(curl -fsSL .../server-dev.sh) --agent-setup
 
+# redo ONLY the agent step on a box that's already provisioned
+bash <(curl -fsSL .../server-dev.sh) --agent-setup-only
+
 # headless Chrome/Chromium for browser automation + screenshots
 bash <(curl -fsSL .../server-dev.sh) --chrome
 ```
@@ -274,6 +277,49 @@ Replicates the Claude Code + Codex setup on the box (implies
 
 Existing `settings.json` / `config.toml` are backed up to
 `*.backup` first.
+
+#### Re-running just this step (`--agent-setup-only`)
+
+```bash
+bash <(curl -fsSL .../server-dev.sh) --agent-setup-only
+```
+
+Runs `--agent-setup` and nothing else — no apt, no Docker, no
+`chsh`, no dotfile copies. It still pulls the dotfiles repo first,
+so it picks up any change to the plugin list.
+
+Use it to retry installs that failed, or to pick up a plugin added
+to the arrays since the box was built, without a full rebuild.
+
+**None of it requires being logged in to Claude Code.** Marketplace
+adds are `git clone` and installs are file copies — no call reaches
+the Anthropic API, so plugins install fine on a box that has never
+been signed in. Log in whenever you like; it's unrelated. It also
+does not activate a shell for you, so it puts an already-installed
+fnm/Node on `PATH` itself rather than reinstalling the CLIs it
+can't see.
+
+#### When a plugin doesn't install
+
+Marketplace and plugin steps print `FAILED` plus the actual error,
+and the end of `--agent-setup` lists everything that failed. A
+plugin you already have is reported as `(already present)` and is
+not a failure. Nothing about the plugin step is silent — an
+earlier version swallowed all of it into one "already installed or
+unavailable" line, and a provisioning run reported success while
+installing nothing.
+
+The marketplace list in `server-dev.sh` is written as
+`owner/repo=alias`. The alias is **not** the repo name — it comes
+from the `name` field in that repo's
+`.claude-plugin/marketplace.json`, and `expo/skills` registers as
+`expo-plugins`. `AGENT_PLUGINS` entries are checked against those
+aliases before anything is installed.
+
+Known upstream breakage: `expo/skills` currently fails to add at
+all. It carries a git submodule pointing at a private repo, so the
+clone aborts and no expo plugin can install. Nothing to fix on
+this side.
 
 **Jira/Atlassian needs a one-time OAuth login** — it can't be
 provisioned headlessly. See

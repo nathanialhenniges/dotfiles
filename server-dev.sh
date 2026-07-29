@@ -41,6 +41,7 @@ set -e
 set -o pipefail
 
 REPO_URL="https://github.com/nathanialhenniges/dotfiles.git"
+RAW_URL="https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/server-dev.sh"
 DOTFILES_DIR="$HOME/dotfiles"
 
 # Parse flags.
@@ -73,23 +74,31 @@ Flags:
   --agent-setup             implies --ai; also installs plugins into both CLIs,
                             the skills pack, curated settings, and pre-registers
                             the Atlassian (Jira) MCP
+  --agent-setup-only        run ONLY the --agent-setup step on a box this script
+                            already provisioned — no apt, no Docker, no shell
+                            changes. For re-running plugin installs that failed
+                            (the run prints which ones) without a full rebuild.
   --chrome                  install headless Chrome/Chromium for browser automation
   -h, --help                show this help
 
 Always applied: dev toolchain (fnm + latest LTS Node, Docker, gh, direnv, bun,
 go, build-essential, jq, eza, btop), plus ~/Developer and ~/Downloads.
+(--agent-setup-only skips all of that by design.)
 USAGE
 }
 
 INSTALL_AI=""
 INSTALL_PNPM=""
 AGENT_SETUP=""
+AGENT_SETUP_ONLY=""
 INSTALL_CHROME=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ai)          INSTALL_AI=1; shift ;;
     --pnpm)        INSTALL_PNPM=1; shift ;;
     --agent-setup) AGENT_SETUP=1; shift ;;
+    # Implies --agent-setup: asking for only that step is asking for that step.
+    --agent-setup-only) AGENT_SETUP=1; AGENT_SETUP_ONLY=1; shift ;;
     --chrome)      INSTALL_CHROME=1; shift ;;
     -h|--help)     usage; exit 0 ;;
     --hostname|--hostname=*|--no-firewall)
@@ -102,7 +111,7 @@ while [[ $# -gt 0 ]]; do
       exit 1 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --ai, --pnpm, --agent-setup, --chrome, --help" >&2
+      echo "Try: --ai, --pnpm, --agent-setup, --agent-setup-only, --chrome, --help" >&2
       exit 1 ;;
   esac
 done
@@ -183,6 +192,20 @@ install_fnm_node() {
   substep "Node.js $(node --version 2>/dev/null) (LTS) set as default"
 }
 
+# Put an ALREADY-installed fnm/Node on PATH, installing and upgrading nothing.
+#
+# --agent-setup-only skips install_fnm_node, and on a provisioned box the
+# toolchain is activated from .zshrc — so under bash `claude` and `node` do not
+# resolve even though they are installed. Without this, agent_setup would decide
+# the CLIs are missing and reinstall them, which is the opposite of "only".
+activate_existing_node() {
+  export PATH="$HOME/.local/share/fnm:$PATH"
+  if command -v fnm &>/dev/null; then
+    eval "$(fnm env)" || true
+    fnm use default &>/dev/null || true
+  fi
+}
+
 # Echo an npm-global command: direct npm, else via fnm's default node, else empty.
 npm_global_cmd() {
   if command -v npm &>/dev/null; then
@@ -230,14 +253,26 @@ install_docker() {
 # GitHub-shorthand marketplaces + plugins, shared by both Claude Code and Codex
 # (both take `plugin marketplace add owner/repo` and `plugin (install|add)
 # name@marketplace`, so the same set installs into each).
+#
+# Entries are `owner/repo=alias`. The alias is NOT derived from the repo name —
+# it comes from the "name" field in that repo's .claude-plugin/marketplace.json,
+# and the two differ often enough to matter: expo/skills registers as
+# `expo-plugins`. Writing the alias down here is what lets agent_plugin_preflight
+# catch an AGENT_PLUGINS entry pointing at a marketplace nothing registers.
 AGENT_MARKETPLACES=(
-  anthropics/claude-plugins-official
-  JuliusBrussee/caveman
-  DietrichGebert/ponytail
-  mksglu/context-mode
-  elvismdev/claude-wordpress-skills
-  expo/skills
-  tsanva/cc-discord-presence
+  anthropics/claude-plugins-official=claude-plugins-official
+  JuliusBrussee/caveman=caveman
+  DietrichGebert/ponytail=ponytail
+  mksglu/context-mode=context-mode
+  elvismdev/claude-wordpress-skills=claude-wordpress-skills
+  # KNOWN BROKEN UPSTREAM (checked 2026-07-29): adding this fails, and so does
+  # every expo plugin under it. expo/skills carries a submodule `eval-harness`
+  # pointing at github.com/expo/eval-experiments, which is private or gone, and
+  # the CLI clones marketplaces with submodules — so the clone aborts and the
+  # marketplace never registers. Nothing to fix on our side; kept here so it
+  # starts working the moment upstream drops the submodule. The run now says so
+  # out loud instead of shrugging.
+  expo/skills=expo-plugins
 )
 AGENT_PLUGINS=(
   atlassian@claude-plugins-official
@@ -248,9 +283,62 @@ AGENT_PLUGINS=(
   ponytail@ponytail
   context-mode@context-mode
   claude-wordpress-skills@claude-wordpress-skills
-  expo-deployment@expo-plugins
-  upgrading-expo@expo-plugins
+  # `expo-deployment` and `upgrading-expo` are deprecated upstream aliases that
+  # both resolve to ./plugins/expo — installing them got you the same plugin
+  # twice under two dead names.
+  expo@expo-plugins
 )
+
+# Every failed marketplace/plugin step, replayed at the end of agent_setup.
+AGENT_SETUP_FAILURES=()
+
+# Runs one plugin/marketplace command and reports what actually happened.
+#
+# The old form was `cmd &>/dev/null || substep "... (already installed or
+# unavailable)"`, which collapsed "no-op, you already have this" and "this is
+# broken and you do not have it" into one reassuring line. That is how the expo
+# marketplace failure survived a whole provisioning run on chi-01: the add
+# failed, both installs under it failed as a consequence, and the log said
+# nothing a person would stop on. Exit status alone can't separate the two
+# either — both are non-zero — so match the output.
+agent_try() { # <description> <command...>
+  local what=$1; shift
+  # `rc`, not `status` — that name is a read-only special in zsh, and these
+  # helpers get eval'd out of this file by tests and by hand.
+  local out rc=0 flat
+  out=$("$@" 2>&1) || rc=$?
+  if (( rc == 0 )); then
+    substep "$what"
+  elif grep -qiE 'already (installed|added|exists|present)|is already' <<<"$out"; then
+    substep "$what (already present)"
+  else
+    # These tools spew a whole git clone transcript, and the reason lands at the
+    # END of it — a naive head-of-output would show a progress bar and a temp
+    # path, which hides the error about as well as /dev/null did. Drop the
+    # progress noise, keep the last few lines, flatten, cap.
+    flat=$(printf '%s\n' "$out" \
+      | grep -avE 'Updating files|Receiving objects|Resolving deltas|Cloning into|remote: (Counting|Compressing|Enumerating|Total)' \
+      | tail -n 3 | tr '\n' ' ' | tr -s ' ') || flat=$(tr '\n' ' ' <<<"$out")
+    substep "FAILED  $what"
+    substep "        ${flat:0:240}"
+    AGENT_SETUP_FAILURES+=("$what")
+  fi
+}
+
+# Catches an AGENT_PLUGINS entry whose @marketplace nothing in
+# AGENT_MARKETPLACES registers. That mismatch is unfixable at install time and
+# silent at runtime, so check it before touching the box.
+agent_plugin_preflight() {
+  local known=" " m p rc=0
+  for m in "${AGENT_MARKETPLACES[@]}"; do known+="${m##*=} "; done
+  for p in "${AGENT_PLUGINS[@]}"; do
+    if [[ "$known" != *" ${p##*@} "* ]]; then
+      substep "BUG: $p names marketplace '${p##*@}', which AGENT_MARKETPLACES never registers"
+      rc=1
+    fi
+  done
+  return $rc
+}
 
 install_chrome() {
   # Headless browser for automation/screenshots (Playwright, Puppeteer,
@@ -296,19 +384,21 @@ agent_setup() {
   substep "settings.json + $(ls -1 "$agent_dir/claude/skills" | wc -l | tr -d ' ') skills installed"
 
   local m p
+  agent_plugin_preflight || substep "^ fix the arrays in server-dev.sh; installing the rest anyway"
+
   # Claude Code plugins — add each marketplace, then install each plugin.
   if command -v claude &>/dev/null; then
     log "Adding Claude Code plugin marketplaces..."
     for m in "${AGENT_MARKETPLACES[@]}"; do
-      claude plugin marketplace add "$m" &>/dev/null || substep "claude marketplace $m (already added or unavailable)"
+      agent_try "claude marketplace ${m%%=*}" claude plugin marketplace add "${m%%=*}"
     done
     log "Installing Claude Code plugins..."
     for p in "${AGENT_PLUGINS[@]}"; do
-      claude plugin install "$p" &>/dev/null || substep "claude plugin $p (already installed or unavailable)"
+      agent_try "claude plugin $p" claude plugin install "$p"
     done
     # Pre-register the Atlassian (Jira) MCP — OAuth login is manual, see docs.
-    claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp &>/dev/null \
-      || substep "atlassian MCP (already added or unavailable)"
+    agent_try "atlassian MCP" \
+      claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp
   else
     substep "claude CLI missing — skipped plugins + Jira MCP"
   fi
@@ -324,11 +414,11 @@ agent_setup() {
   if command -v codex &>/dev/null; then
     log "Adding Codex plugin marketplaces (same as Claude)..."
     for m in "${AGENT_MARKETPLACES[@]}"; do
-      codex plugin marketplace add "$m" &>/dev/null || substep "codex marketplace $m (already added or unavailable)"
+      agent_try "codex marketplace ${m%%=*}" codex plugin marketplace add "${m%%=*}"
     done
     log "Installing Codex plugins..."
     for p in "${AGENT_PLUGINS[@]}"; do
-      codex plugin add "$p" &>/dev/null || substep "codex plugin $p (unavailable — install manually)"
+      agent_try "codex plugin $p" codex plugin add "$p"
     done
   else
     substep "codex CLI missing — skipped codex plugins"
@@ -336,6 +426,17 @@ agent_setup() {
 
   substep "Agent setup done. Jira/Atlassian needs a one-time OAuth login —"
   substep "  see $DOTFILES_DIR/docs/jira-mcp-setup.md (claude: /mcp; codex: first run)."
+
+  if (( ${#AGENT_SETUP_FAILURES[@]} > 0 )); then
+    echo ""
+    echo "==> ${#AGENT_SETUP_FAILURES[@]} agent-setup step(s) FAILED — the rest of the box is fine:"
+    printf '      - %s\n' "${AGENT_SETUP_FAILURES[@]}"
+    echo "    None of this needs you to be logged in — these are git clones, not"
+    echo "    API calls. To retry just this step, without rebuilding the box:"
+    echo "      bash <(curl -fsSL $RAW_URL) --agent-setup-only"
+    echo "    Or re-run one by hand to see its full error, e.g."
+    echo "      claude plugin marketplace add <owner/repo>"
+  fi
 }
 
 # ── Run ──────────────────────────────────────────────────────────────────────
@@ -344,6 +445,17 @@ detect_os
 if [[ "$OS" == "Darwin" ]]; then
   echo "==> server-dev.sh is Linux-only. On macOS use ./install.sh (Brewfile + OrbStack)."
   exit 1
+fi
+
+# --agent-setup-only: the agent step and nothing else. No apt, no Docker, no
+# chsh, no dotfile copies. Meant for a box this script already provisioned —
+# typically to retry plugin installs that failed the first time.
+if [[ -n "$AGENT_SETUP_ONLY" ]]; then
+  activate_existing_node
+  agent_setup
+  echo ""
+  echo "==> Agent setup done. Nothing else was touched (--agent-setup-only)."
+  exit 0
 fi
 
 # Home directory layout
@@ -384,5 +496,12 @@ echo "    - Log out and back in for Docker group membership to apply."
 echo "    - Run 'gh auth login' to authenticate the GitHub CLI."
 echo "      To scope gh to a single org, use a fine-grained PAT:"
 echo "      gh auth login --with-token < token.txt   (see README)"
+if [[ -n "$AGENT_SETUP" ]]; then
+echo "    - Run 'claude' once to log in to your Claude Code account. Plugins are"
+echo "      already installed — they are git clones and need no login — so this"
+echo "      is only about signing in. To redo the plugin step later (say, after"
+echo "      a marketplace that was down comes back), re-run just that step:"
+echo "      bash <(curl -fsSL $RAW_URL) --agent-setup-only"
+fi
 echo "    - Reach dev app ports from your laptop with SSH forwarding, e.g.:"
 echo "      ssh -L 3000:localhost:3000 $USER@<this-box>   (see README)"
