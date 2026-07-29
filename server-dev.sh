@@ -454,6 +454,43 @@ install_chrome() {
     sudo apt install -y chromium fonts-liberation 2>/dev/null \
       || sudo apt install -y chromium-browser fonts-liberation
     substep "chromium installed"
+    # On 24.04 `chromium` is a snap shim, and the chromium snap pulls the cups
+    # snap for printing — which then listens on 0.0.0.0:631. A print server on a
+    # headless box is pure attack surface. UFW blocks it from outside, but there
+    # is no reason to run it at all. Observed on chi-01.
+    if snap list cups &>/dev/null; then
+      sudo snap stop --disable cups &>/dev/null \
+        && substep "cups snap disabled (was listening on :631)"
+    fi
+  fi
+}
+
+# Ubuntu cloud images ship minimized: no man pages, stripped docs. `man ls`
+# returns nothing, which is miserable on a box you actually work on.
+#
+# The side effect must not be silent. unminimize installs the ubuntu-server
+# metapackage, which drags in nfs-common, which drags in rpcbind — and rpcbind
+# listens on 0.0.0.0:111. UFW blocks it from the internet, but a portmapper on a
+# dev box is pointless attack surface, so it gets turned off in the same breath.
+# Observed on chi-01: a run that "just restored man pages" opened a port.
+#
+# Runs last because it is slow and reinstalls a lot of packages; nothing above
+# should wait on it, and its failure must not cost you the toolchain.
+restore_docs() {
+  command -v unminimize &>/dev/null || return 0
+  # Already unminimized? man1 is empty on a minimized image.
+  [[ -n "$(ls -A /usr/share/man/man1 2>/dev/null)" ]] && return 0
+
+  log "Restoring docs and man pages (unminimize)..."
+  substep "this takes a few minutes"
+  if ! yes | sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a unminimize; then
+    substep "unminimize failed, skipping"
+    return 0
+  fi
+
+  if systemctl list-unit-files 2>/dev/null | grep -q '^rpcbind'; then
+    sudo systemctl disable --now rpcbind.socket rpcbind &>/dev/null || true
+    substep "rpcbind disabled (unminimize pulled it in; it listens on :111)"
   fi
 }
 
@@ -579,6 +616,9 @@ install_fnm_node
 [[ -n "$AGENT_SETUP" ]] && agent_setup
 [[ -n "$INSTALL_CHROME" ]] && install_chrome
 install_docker
+
+# Slow and package-heavy, so it runs after everything that matters.
+restore_docs
 
 # Cloud images create the default user with a locked password, and chsh
 # authenticates through PAM against it — so this can fail on a perfectly good
