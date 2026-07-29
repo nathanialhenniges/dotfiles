@@ -139,6 +139,33 @@ create_home_dirs() {
   substep "~/Developer, ~/Downloads ready"
 }
 
+# Oracle VCN subnets hand out an IPv6 address AND a default IPv6 route on
+# networks that have no actual IPv6 transit. Every client then believes IPv6
+# works: DNS returns AAAA first, the connection goes nowhere, and there is no
+# error — just a stall.
+#
+# curl survives on Happy Eyeballs, which is why the box looks fine. bun does
+# not: `bun install` sits at "Resolving dependencies" forever, on every repo,
+# with node_modules never appearing. Diagnosed on chi-01 — `bun -e 'fetch(...)'`
+# by hostname hung, the same fetch to a literal IP returned 200, and
+# `curl -6` to the registry returned 000.
+#
+# The fix is one glibc precedence line: prefer IPv4-mapped addresses. Guarded
+# on IPv6 being both present and dead, so it is a no-op on a box with working
+# IPv6 and on a box with none at all.
+#
+# Runs before anything installs, since apt and every curl below benefit too.
+prefer_ipv4_if_v6_is_dead() {
+  ip -6 route show default 2>/dev/null | grep -q . || return 0
+  if curl -6 -sS --max-time 6 -o /dev/null https://registry.npmjs.org/ 2>/dev/null; then
+    return 0
+  fi
+  grep -qs '^precedence ::ffff:0:0/96  100' /etc/gai.conf && return 0
+  log "IPv6 route present but not working — preferring IPv4"
+  echo 'precedence ::ffff:0:0/96  100' | sudo tee -a /etc/gai.conf >/dev/null
+  substep "added precedence line to /etc/gai.conf (bun install hangs without it)"
+}
+
 install_dev_packages() {
   log "Installing dev packages..."
   sudo apt update
@@ -686,6 +713,10 @@ fi
 
 # Home directory layout
 create_home_dirs
+
+# Before anything fetches: a dead IPv6 default route makes bun install hang
+# forever and slows apt/curl down.
+prefer_ipv4_if_v6_is_dead
 
 # Base environment (shared with server.sh)
 install_base_packages
