@@ -142,6 +142,15 @@ check "--agent-setup-only implies --agent-setup" "AGENT_SETUP=1 AGENT_SETUP_ONLY
 
 check "only-branch exits before the full run" "yes" \
   "$(awk '/^if \[\[ -n "\$AGENT_SETUP_ONLY" \]\]; then/,/^fi/' "$SCRIPT" | grep -q 'exit 0' && echo yes || echo no)"
+# On a box with no Node the CLIs can't be installed, so agent_setup would copy
+# settings and skills and then skip every plugin — configured-looking and not
+# configured, which is the failure this whole file exists to prevent.
+only_branch=$(awk '/^if \[\[ -n "\$AGENT_SETUP_ONLY" \]\]; then/,/^fi/' "$SCRIPT")
+check "bare box refused, not half-done" "yes" \
+  "$(grep -q 'npm_global_cmd' <<<"$only_branch" && grep -q 'exit 1' <<<"$only_branch" && echo yes || echo no)"
+check "refusal names the right flag" "yes" \
+  "$(grep -q -- ') --agent-setup"' <<<"$only_branch" && echo yes || echo no)"
+
 check "only-branch runs before create_home_dirs" "yes" \
   "$([[ $(grep -n 'AGENT_SETUP_ONLY" \]\]; then' "$SCRIPT" | tail -1 | cut -d: -f1) -lt \
       $(grep -n '^create_home_dirs' "$SCRIPT" | tail -1 | cut -d: -f1) ]] && echo yes || echo no)"

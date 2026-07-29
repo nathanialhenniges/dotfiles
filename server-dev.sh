@@ -540,6 +540,18 @@ fi
 # typically to retry plugin installs that failed the first time.
 if [[ -n "$AGENT_SETUP_ONLY" ]]; then
   activate_existing_node
+  # On a box that was never provisioned there is no Node, so the agent CLIs
+  # cannot be installed and agent_setup would do half its job quietly: copy
+  # settings and skills, then skip every plugin. Refuse instead. A box that
+  # looks configured and isn't is the exact failure this whole change exists to
+  # stop.
+  if ! command -v claude &>/dev/null && [[ -z "$(npm_global_cmd)" ]]; then
+    echo "==> --agent-setup-only is for a box this script already provisioned." >&2
+    echo "    No Node toolchain found here, so the agent CLIs can't be installed" >&2
+    echo "    and every plugin step would be skipped. Run the full setup first:" >&2
+    echo "      bash <(curl -fsSL $RAW_URL) --agent-setup" >&2
+    exit 1
+  fi
   agent_setup
   echo ""
   echo "==> Agent setup done. Nothing else was touched (--agent-setup-only)."
