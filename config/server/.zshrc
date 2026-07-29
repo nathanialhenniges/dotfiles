@@ -58,5 +58,10 @@ bindkey "^[[B" history-search-forward
 [[ -d "$HOME/.local/share/fnm" ]] && export PATH="$HOME/.local/share/fnm:$PATH"
 command -v fnm &>/dev/null && eval "$(fnm env --use-on-cd --shell zsh)"
 
+# ── Bun — active only if installed ─────────────────────────
+# The bun installer writes its own PATH block to ~/.bashrc, never ~/.zshrc,
+# so on a zsh box bun is installed but invisible without this.
+[[ -d "$HOME/.bun/bin" ]] && export PATH="$HOME/.bun/bin:$PATH"
+
 # ── Secrets (API tokens, etc.) ─────────────────────────────
 [[ -f ~/.secrets ]] && source ~/.secrets
