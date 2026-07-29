@@ -118,7 +118,9 @@ cd ~/Developer/nathanialhenniges/dotfiles
   Oh My Zsh, and minimal server configs from `config/server/`.
 - `./server-dev.sh` — Bootstrap a remote Linux **dev** server:
   everything `server.sh` does, plus fnm + Node, Docker, and dev
-  CLIs (gh, direnv, bun, go, build-essential, jq, eza, btop).
+  CLIs (gh, direnv, bun, go, build-essential, jq, eza, btop),
+  plus a MacBook-parity set (ncdu, gnupg, ffmpeg, rclone, yt-dlp,
+  fastfetch, awscli, terraform, act) installed best-effort.
 - `lib/bootstrap.sh` — Shared helper functions sourced by
   `server.sh` and `server-dev.sh` (base packages, Oh My Zsh,
   plugins, Oh My Posh, config copy, shell switch).
