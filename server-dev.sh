@@ -410,6 +410,52 @@ agent_try() { # <description> <command...>
     substep "FAILED  $what"
     substep "        ${flat:0:240}"
     AGENT_SETUP_FAILURES+=("$what")
+    return 1
+  fi
+}
+
+# Drops a recorded failure that a later fallback went on to fix. Without this the
+# closing summary would report a step that actually succeeded, which is the same
+# class of lie as reporting success for a step that failed.
+agent_forget_failure() { # <description>
+  local keep=() f
+  for f in "${AGENT_SETUP_FAILURES[@]}"; do
+    [[ "$f" == "$1" ]] || keep+=("$f")
+  done
+  AGENT_SETUP_FAILURES=("${keep[@]}")
+}
+
+# Where submodule-free marketplace clones live. Not ~/.claude — that directory
+# is the CLI's, and a hand-managed checkout inside it invites a future `plugin
+# marketplace remove` to take the clone with it.
+MARKETPLACE_CACHE="$HOME/.local/share/claude-marketplaces"
+
+# Last resort for a marketplace the CLI cannot clone the way it wants to.
+#
+# expo/skills carries a submodule pointing at expo/eval-experiments, which is
+# private (added in expo/skills#105 for Expo's own eval CI — no value to anyone
+# installing the plugin). Claude Code clones marketplaces with
+# --recurse-submodules, so the clone aborts and nothing registers; codex does not
+# recurse, which is exactly why codex installs the same repo without complaint.
+#
+# Cloning without submodules and adding the resulting DIRECTORY works, under the
+# same alias with the same plugins. This runs ONLY after the normal add has
+# already failed, so the day upstream drops the submodule the ordinary path
+# succeeds first and this never fires. Nothing to remember to undo.
+marketplace_add_local() { # <owner/repo> <cli>
+  local repo=$1 cli=$2
+  local dir="$MARKETPLACE_CACHE/${repo//\//-}"
+  mkdir -p "$MARKETPLACE_CACHE"
+  if [[ -d "$dir/.git" ]]; then
+    git -C "$dir" pull --ff-only -q 2>/dev/null \
+      || substep "        (couldn't refresh $dir — using the existing checkout)"
+  elif ! git clone -q --depth 1 --no-recurse-submodules \
+         "https://github.com/$repo.git" "$dir" 2>/dev/null; then
+    return 1
+  fi
+  if agent_try "$cli marketplace $repo (via submodule-free local clone)" \
+       "$cli" plugin marketplace add "$dir"; then
+    agent_forget_failure "$cli marketplace $repo"
   fi
 }
 
@@ -515,15 +561,19 @@ agent_setup() {
   if command -v claude &>/dev/null; then
     log "Adding Claude Code plugin marketplaces..."
     for m in "${AGENT_MARKETPLACES[@]}"; do
-      agent_try "claude marketplace ${m%%=*}" claude plugin marketplace add "${m%%=*}"
+      # agent_try returns non-zero on a real failure, so the fallback only runs
+      # when the normal add genuinely didn't work. `|| true` keeps set -e out of
+      # it when both paths fail — that is reported, not fatal.
+      agent_try "claude marketplace ${m%%=*}" claude plugin marketplace add "${m%%=*}" \
+        || marketplace_add_local "${m%%=*}" claude || true
     done
     log "Installing Claude Code plugins..."
     for p in "${AGENT_PLUGINS[@]}"; do
-      agent_try "claude plugin $p" claude plugin install "$p"
+      agent_try "claude plugin $p" claude plugin install "$p" || true
     done
     # Pre-register the Atlassian (Jira) MCP — OAuth login is manual, see docs.
     agent_try "atlassian MCP" \
-      claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp
+      claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp || true
   else
     substep "claude CLI missing — skipped plugins + Jira MCP"
   fi
@@ -559,20 +609,30 @@ agent_setup() {
   if command -v codex &>/dev/null; then
     log "Adding Codex plugin marketplaces (same as Claude)..."
     for m in "${AGENT_MARKETPLACES[@]}"; do
-      # Self-heal for boxes provisioned before the config.toml clobber was
-      # fixed: their registrations were wiped but ~/.codex/plugins/cache
-      # survived, so `add` refuses with "already added from a different source"
-      # while `marketplace list` shows nothing. `remove` clears the stale cache
-      # entry and lets the add land. No-op on a healthy box, because the add
-      # only fails there for real reasons (see expo/skills).
+      # Two unrelated failures stack up here, so both get a turn.
+      #
+      # First: boxes provisioned before the config.toml clobber was fixed had
+      # their registrations wiped while ~/.codex/plugins/cache survived, so
+      # `add` refuses with "already added from a different source" while
+      # `marketplace list` shows nothing. `remove` clears the stale entry and
+      # lets the add land.
+      #
+      # Second: a repo the CLI cannot clone at all (see expo/skills) needs the
+      # submodule-free local clone. codex doesn't recurse submodules so it has
+      # never needed that one — it gets it anyway rather than encoding "expo is
+      # Claude's problem only", which stops being true the moment another repo
+      # does the same thing.
+      #
+      # Both are no-ops on a healthy box.
       if ! codex plugin marketplace add "${m%%=*}" &>/dev/null; then
         codex plugin marketplace remove "${m##*=}" &>/dev/null || true
-        agent_try "codex marketplace ${m%%=*}" codex plugin marketplace add "${m%%=*}"
+        agent_try "codex marketplace ${m%%=*}" codex plugin marketplace add "${m%%=*}" \
+          || marketplace_add_local "${m%%=*}" codex || true
       fi
     done
     log "Installing Codex plugins..."
     for p in "${AGENT_PLUGINS[@]}"; do
-      agent_try "codex plugin $p" codex plugin add "$p"
+      agent_try "codex plugin $p" codex plugin add "$p" || true
     done
   else
     substep "codex CLI missing — skipped codex plugins"

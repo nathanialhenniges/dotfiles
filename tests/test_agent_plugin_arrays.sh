@@ -26,6 +26,7 @@ eval "$(awk '/^AGENT_MARKETPLACES=\(/,/^\)/'          "$SCRIPT")"
 eval "$(awk '/^AGENT_PLUGINS=\(/,/^\)/'               "$SCRIPT")"
 eval "$(awk '/^AGENT_SETUP_FAILURES=\(\)/'            "$SCRIPT")"
 eval "$(awk '/^agent_try\(\) \{/,/^\}/'               "$SCRIPT")"
+eval "$(awk '/^agent_forget_failure\(\) \{/,/^\}/'    "$SCRIPT")"
 eval "$(awk '/^agent_plugin_preflight\(\) \{/,/^\}/'  "$SCRIPT")"
 
 pass=0; fail=0
@@ -127,6 +128,40 @@ PY
 else
   echo "  SKIP  settings.json cross-check (needs python3)"
 fi
+
+echo "== agent_try signals failure so a fallback can run =="
+# The fallback hangs off agent_try's exit status. If it ever goes back to always
+# returning 0, marketplace_add_local silently stops being reachable and expo
+# quietly breaks again — the exact regression this file exists to catch.
+agent_try "ok" true >/dev/null;                       check "returns 0 on success" "0" "$?"
+agent_try "dup" bash -c 'echo already installed; exit 1' >/dev/null
+check "returns 0 when already present" "0" "$?"
+agent_try "bad" bash -c 'echo nope; exit 1' >/dev/null; check "returns 1 on real failure" "1" "$?"
+
+echo "== a failure fixed by a fallback leaves the summary =="
+# Reporting a step as FAILED after a fallback repaired it is the same lie as
+# reporting success for a step that failed, just pointing the other way.
+AGENT_SETUP_FAILURES=()
+agent_try "claude marketplace expo/skills" bash -c 'exit 1' >/dev/null || true
+agent_try "claude marketplace other/repo"  bash -c 'exit 1' >/dev/null || true
+check "both failures recorded" "2" "${#AGENT_SETUP_FAILURES[@]}"
+agent_forget_failure "claude marketplace expo/skills"
+check "fixed one dropped"      "1" "${#AGENT_SETUP_FAILURES[@]}"
+check "the other one kept"     "claude marketplace other/repo" "${AGENT_SETUP_FAILURES[0]}"
+agent_forget_failure "claude marketplace other/repo"
+check "emptying the list is safe" "0" "${#AGENT_SETUP_FAILURES[@]}"
+
+echo "== the fallback is wired in, not just defined =="
+check "claude loop falls back"  "yes" \
+  "$(grep -q 'marketplace_add_local "${m%%=\*}" claude' "$SCRIPT" && echo yes || echo no)"
+check "codex loop falls back"   "yes" \
+  "$(grep -q 'marketplace_add_local "${m%%=\*}" codex' "$SCRIPT" && echo yes || echo no)"
+# agent_try now returns 1, so an unguarded call under `set -e` would abort the run
+# mid-setup — worse than the silence this all started as.
+check "plugin loops guard set -e" "2" \
+  "$(grep -cE 'agent_try "(claude|codex) plugin \$p" .* \|\| true' "$SCRIPT")"
+check "clone skips submodules"  "yes" \
+  "$(grep -q 'no-recurse-submodules' "$SCRIPT" && echo yes || echo no)"
 
 echo "== --agent-setup-only parses and stops early =="
 # The flag is only useful if it (a) implies --agent-setup, so the step it names
