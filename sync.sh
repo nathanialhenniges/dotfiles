@@ -9,8 +9,6 @@ files=(
   ".p10k.zsh"
   ".profile"
   ".aliases"
-  ".gitconfig"
-  ".npmrc"
   ".nuxtrc"
 )
 
@@ -32,6 +30,8 @@ for file in "${files[@]}"; do
     fi
   fi
 done
+
+echo "Skipped .gitconfig and .npmrc; review them manually before committing to this public repo"
 
 # Nested config files
 mkdir -p "$CONFIG_DIR/.config/ohmyposh"
