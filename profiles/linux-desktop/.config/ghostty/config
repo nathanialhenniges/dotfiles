@@ -1,11 +1,19 @@
 # Linux desktop Ghostty profile. macOS-only options intentionally omitted.
 font-family = Cascadia Code
-font-size = 13
+font-size = 14
+font-feature = calt
+font-feature = liga
+adjust-cell-height = 2
 theme = light:Monokai Pro Octagon,dark:Monokai Pro Octagon
-window-padding-x = 10
+window-theme = auto
+window-padding-x = 12
 window-padding-y = 8
 window-padding-balance = true
+cursor-style = bar
+cursor-style-blink = true
+command = direct:/usr/bin/zsh
 shell-integration = zsh
 copy-on-select = clipboard
 mouse-hide-while-typing = true
 confirm-close-surface = true
+link-url = true
