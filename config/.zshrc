@@ -112,3 +112,8 @@ bindkey "^[[B" history-search-forward
 # Store secrets in ~/.secrets (never committed to git)
 [[ -f ~/.secrets ]] && source ~/.secrets
 eval "$(direnv hook zsh)"
+
+# User-installed CLI paths. Keep these HOME-relative for macOS and Linux.
+export PATH="$HOME/.local/bin:$PATH"
+[[ -d "$HOME/.antigravity/antigravity/bin" ]] && export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
+[[ -d "$HOME/.lmstudio/bin" ]] && export PATH="$PATH:$HOME/.lmstudio/bin"
