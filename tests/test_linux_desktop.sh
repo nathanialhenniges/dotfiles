@@ -48,6 +48,7 @@ cmp -s "$profile_dir/.zshrc" "$home_dir/.zshrc" || fail "zshrc not applied"
 cmp -s "$profile_dir/.aliases" "$home_dir/.aliases" || fail "aliases not applied"
 cmp -s "$profile_dir/.config/ghostty/config" "$home_dir/.config/ghostty/config" || fail "Ghostty config not applied"
 grep -Fxq 'command = direct:/usr/bin/zsh' "$home_dir/.config/ghostty/config" || fail "Ghostty does not launch Zsh directly"
+grep -Fxq 'font-family = CaskaydiaCove Nerd Font Mono' "$home_dir/.config/ghostty/config" || fail "Ghostty does not use the Oh My Posh Nerd Font"
 if grep -Eq '^(macos-|background-blur)|cmd\+' "$home_dir/.config/ghostty/config"; then
   fail "macOS-only or GNOME-unsafe Ghostty option leaked into Linux"
 fi

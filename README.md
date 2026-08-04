@@ -59,7 +59,8 @@ must remain inside `HOME` and may not traverse symbolic links. It never copies
 credential files.
 
 The Linux Ghostty profile carries the portable parts of the Mac configuration,
-uses the packaged Cascadia Code font, and launches `/usr/bin/zsh` directly.
+uses the CaskaydiaCove Nerd Font installed by `linux-setup`, and launches
+`/usr/bin/zsh` directly.
 macOS-only titlebar, P3, blur, and Command-key options stay out of Ubuntu.
 
 Update an already-configured Ubuntu desktop through its trusted setup checkout:

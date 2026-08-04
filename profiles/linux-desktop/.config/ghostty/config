@@ -1,5 +1,5 @@
 # Linux desktop Ghostty profile. macOS-only options intentionally omitted.
-font-family = Cascadia Code
+font-family = CaskaydiaCove Nerd Font Mono
 font-size = 14
 font-feature = calt
 font-feature = liga
