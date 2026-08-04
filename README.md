@@ -22,6 +22,11 @@ Your terminal is your workshop. Keep it sharp.
 
 ## Getting Started
 
+> **Ubuntu Desktop:** do not run the general `install.sh`. Use the dedicated
+> [`linux-setup`](https://github.com/nathanialhenniges/linux-setup) repository,
+> which installs system packages first and then calls this repository's
+> home-only `linux-desktop.sh`. Server and devbox setup remain separate.
+
 1. Clone the repository:
 
 ```bash
@@ -39,6 +44,19 @@ cd ~/Developer/nathanialhenniges/dotfiles
 3. Restart your terminal to apply changes.
 
 ## Usage
+
+Preview or apply only the Linux desktop home profile:
+
+```bash
+./linux-desktop.sh --dry-run
+./linux-desktop.sh
+```
+
+This route uses no `sudo` or network calls. It backs up replaced files under
+`${XDG_STATE_HOME:-$HOME/.local/state}/linux-setup/backups/`; that state path
+must remain inside `HOME` and may not traverse symbolic links. It never copies
+`.gitconfig`, agent, server, shared-hosting, Mac-only alias, or private
+credential files.
 
 Sync your current system dotfiles into the repo:
 
@@ -109,6 +127,9 @@ cd ~/Developer/nathanialhenniges/dotfiles
 
 ### Development Scripts
 
+- `./linux-desktop.sh` — Apply the explicit, home-only Ubuntu desktop profile.
+  It does not install packages, change the login shell, fetch Git updates, or
+  touch server/devbox and agent setup.
 - `./sync.sh` — Pull dotfiles from your system into the repo
   and regenerate the Brewfile.
 - `./install.sh` — Install Homebrew (macOS) or apt essentials
@@ -161,6 +182,11 @@ dotfiles/
 │       │   └── config                # Ghostty terminal config (Liquid Glass)
 │       └── ohmyposh/
 │           └── mrdemonwolf.omp.json  # Oh My Posh theme
+├── profiles/
+│   └── linux-desktop/          # Isolated Ubuntu Desktop home profile
+│       ├── .zshrc
+│       ├── .aliases
+│       └── .config/ghostty/config
 ├── lib/
 │   └── bootstrap.sh           # Shared server bootstrap helpers
 ├── docs/
@@ -168,6 +194,7 @@ dotfiles/
 ├── Brewfile                   # Homebrew packages and casks
 ├── sync.sh                    # System -> repo sync script
 ├── install.sh                 # Repo -> system install script
+├── linux-desktop.sh           # Ubuntu Desktop home-only profile installer
 ├── mini.sh                    # Minimal bootstrap (fnm, fzf, direnv, gh)
 ├── server.sh                  # Remote server bootstrap script
 ├── server-dev.sh              # Remote Linux dev-server bootstrap
