@@ -62,6 +62,19 @@ The Linux Ghostty profile carries the portable parts of the Mac configuration,
 uses the packaged Cascadia Code font, and launches `/usr/bin/zsh` directly.
 macOS-only titlebar, P3, blur, and Command-key options stay out of Ubuntu.
 
+Update an already-configured Ubuntu desktop through its trusted setup checkout:
+
+```bash
+cd ~/linux-setup
+git pull --ff-only
+./setup.sh dotfiles
+./setup.sh status
+```
+
+Rerunning `dotfiles` fast-forwards this repository's managed checkout and
+reapplies only the allowlisted desktop profile. It does not invoke the general,
+server, devbox, or agent installers.
+
 Sync your current system dotfiles into the repo:
 
 ```bash
