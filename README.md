@@ -58,11 +58,33 @@ must remain inside `HOME` and may not traverse symbolic links. It never copies
 `.gitconfig`, agent, server, shared-hosting, Mac-only alias, or private
 credential files.
 
+The Linux Ghostty profile carries the portable parts of the Mac configuration,
+uses the CaskaydiaCove Nerd Font installed by `linux-setup`, and launches
+`/usr/bin/zsh` directly.
+macOS-only titlebar, P3, blur, and Command-key options stay out of Ubuntu.
+
+Update an already-configured Ubuntu desktop through its trusted setup checkout:
+
+```bash
+cd ~/linux-setup
+git pull --ff-only
+./setup.sh dotfiles
+./setup.sh status
+```
+
+Rerunning `dotfiles` fast-forwards this repository's managed checkout and
+reapplies only the allowlisted desktop profile. It does not invoke the general,
+server, devbox, or agent installers.
+
 Sync your current system dotfiles into the repo:
 
 ```bash
 ./sync.sh
 ```
+
+For public-repo safety, the sync intentionally skips `.gitconfig` and `.npmrc`.
+Review and update those files manually so machine IDs or registry tokens cannot
+be copied by accident.
 
 Review the changes, then commit and push:
 
@@ -130,8 +152,8 @@ cd ~/Developer/nathanialhenniges/dotfiles
 - `./linux-desktop.sh` — Apply the explicit, home-only Ubuntu desktop profile.
   It does not install packages, change the login shell, fetch Git updates, or
   touch server/devbox and agent setup.
-- `./sync.sh` — Pull dotfiles from your system into the repo
-  and regenerate the Brewfile.
+- `./sync.sh` — Pull allowlisted dotfiles from your system into the repo,
+  skip `.gitconfig` and `.npmrc`, and regenerate the Brewfile.
 - `./install.sh` — Install Homebrew (macOS) or apt essentials
   (Linux), Oh My Zsh + plugins, copy dotfiles, and set up
   Node.js via fnm.

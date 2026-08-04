@@ -4,6 +4,7 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 installer="$repo_dir/linux-desktop.sh"
 profile_dir="$repo_dir/profiles/linux-desktop"
+sync_script="$repo_dir/sync.sh"
 test_root="$(mktemp -d)"
 test_root="$(cd "$test_root" && pwd -P)"
 trap 'rm -rf "$test_root"' EXIT
@@ -46,10 +47,18 @@ run_installer >/dev/null
 cmp -s "$profile_dir/.zshrc" "$home_dir/.zshrc" || fail "zshrc not applied"
 cmp -s "$profile_dir/.aliases" "$home_dir/.aliases" || fail "aliases not applied"
 cmp -s "$profile_dir/.config/ghostty/config" "$home_dir/.config/ghostty/config" || fail "Ghostty config not applied"
+grep -Fxq 'command = direct:/usr/bin/zsh' "$home_dir/.config/ghostty/config" || fail "Ghostty does not launch Zsh directly"
+grep -Fxq 'font-family = CaskaydiaCove Nerd Font Mono' "$home_dir/.config/ghostty/config" || fail "Ghostty does not use the Oh My Posh Nerd Font"
+if grep -Eq '^(macos-|background-blur)|cmd\+' "$home_dir/.config/ghostty/config"; then
+  fail "macOS-only or GNOME-unsafe Ghostty option leaked into Linux"
+fi
 cmp -s "$repo_dir/config/.config/ohmyposh/mrdemonwolf.omp.json" \
   "$home_dir/.config/ohmyposh/mrdemonwolf.omp.json" || fail "Oh My Posh theme not applied"
 [[ ! -e "$home_dir/.gitconfig" && ! -e "$home_dir/agent" && ! -e "$home_dir/server" && \
    ! -e "$home_dir/sharedhosting" && ! -e "$home_dir/linux-desktop" ]] || fail "excluded config was copied"
+if grep -Fxq '  ".gitconfig"' "$sync_script" || grep -Fxq '  ".npmrc"' "$sync_script"; then
+  fail "credential-prone config is still in the public sync allowlist"
+fi
 [[ "$(mode_of "$home_dir/.zshrc")" == "644" ]] || fail "zshrc mode is not 0644"
 
 second_output="$(run_installer)"
