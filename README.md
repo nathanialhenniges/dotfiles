@@ -76,6 +76,19 @@ Rerunning `dotfiles` fast-forwards this repository's managed checkout and
 reapplies only the allowlisted desktop profile. It does not invoke the general,
 server, devbox, or agent installers.
 
+For a direct checkout on either macOS or Ubuntu Desktop, use the guarded updater:
+
+```bash
+./update.sh --dry-run
+./update.sh
+```
+
+It requires the exact `nathanialhenniges/dotfiles` origin, the `main` branch,
+and a clean worktree. It fetches and fast-forwards only, never commits or
+pushes. Ubuntu runs only `linux-desktop.sh`; macOS runs the explicit
+apply-only list without Homebrew, packages, plugins, or Node setup. Existing
+macOS files receive a one-time adjacent `.backup` that later runs preserve.
+
 Sync your current system dotfiles into the repo:
 
 ```bash
@@ -152,6 +165,9 @@ cd ~/Developer/nathanialhenniges/dotfiles
 - `./linux-desktop.sh` — Apply the explicit, home-only Ubuntu desktop profile.
   It does not install packages, change the login shell, fetch Git updates, or
   touch server/devbox and agent setup.
+- `./update.sh` — Safely fast-forward and reapply desktop dotfiles on macOS or
+  Ubuntu. Requires the trusted origin, `main`, and a clean worktree; supports
+  `--dry-run` and never commits or pushes.
 - `./sync.sh` — Pull allowlisted dotfiles from your system into the repo,
   skip `.gitconfig` and `.npmrc`, and regenerate the Brewfile.
 - `./install.sh` — Install Homebrew (macOS) or apt essentials
@@ -217,6 +233,7 @@ dotfiles/
 ├── sync.sh                    # System -> repo sync script
 ├── install.sh                 # Repo -> system install script
 ├── linux-desktop.sh           # Ubuntu Desktop home-only profile installer
+├── update.sh                  # Guarded macOS/Ubuntu updater
 ├── mini.sh                    # Minimal bootstrap (fnm, fzf, direnv, gh)
 ├── server.sh                  # Remote server bootstrap script
 ├── server-dev.sh              # Remote Linux dev-server bootstrap
