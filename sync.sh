@@ -1,19 +1,34 @@
 #!/bin/bash
-# Sync dotfiles from system into this repo
+# Sync dotfiles from system into this repo.
+#
+# Capture direction only: system -> repo. The apply direction is install.sh on
+# macOS and linux-desktop.sh on Linux, and update.sh picks between them. Which
+# files get captured comes from the same per-OS mapping table those two use, so
+# running this on the Mac writes config/ and running it on an Ubuntu desktop
+# writes profiles/linux-desktop/ — never each other's.
 DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_DIR="$DOTFILES_DIR/config"
 
 # shellcheck source=lib/bootstrap.sh
 source "$DOTFILES_DIR/lib/bootstrap.sh"
 
-files=(
-  ".zshrc"
-  ".zprofile"
-  ".p10k.zsh"
-  ".profile"
-  ".aliases"
-  ".nuxtrc"
-)
+profile=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --profile) profile="${2:-}"; shift 2 ;;
+    -h|--help)
+      echo "Usage: ./sync.sh [--profile linux-desktop]"
+      echo
+      echo "Captures this machine's managed dotfiles into the repo. macOS needs"
+      echo "no flag. Linux requires --profile, since the server and devbox"
+      echo "configs are applied by server-dev.sh and are never captured."
+      exit 0
+      ;;
+    *) echo "error: unknown option: $1" >&2; exit 1 ;;
+  esac
+done
+
+detect_os
+mappings="$(mappings_for_os "$profile")" || exit 1
 
 # Lines that must never be committed, matched per-file. Nuxt writes a
 # machine-specific telemetry.seed into ~/.nuxtrc on first run; without this
@@ -57,34 +72,37 @@ sync_file() { # source destination [strip_pattern]
   return 0
 }
 
-for file in "${files[@]}"; do
-  if [ -f "$HOME/$file" ]; then
-    strip_pattern="$(strip_pattern_for "$file")"
-    sync_file "$HOME/$file" "$CONFIG_DIR/$file" "$strip_pattern"
-    if [ -n "$strip_pattern" ]; then
-      echo "Synced $file (filtered)"
-    else
-      echo "Synced $file"
-    fi
+echo "Capturing the $OS profile into ${DOTFILES_DIR##*/}/"
+
+synced=0
+missing=0
+while IFS=: read -r repo_path home_path; do
+  [ -n "$repo_path" ] || continue
+  if [ ! -f "$HOME/$home_path" ]; then
+    echo "  skipped  $home_path (not on this machine)"
+    missing=$((missing + 1))
+    continue
   fi
-done
+  strip_pattern="$(strip_pattern_for "${home_path##*/}")"
+  sync_file "$HOME/$home_path" "$DOTFILES_DIR/$repo_path" "$strip_pattern"
+  if [ -n "$strip_pattern" ]; then
+    echo "  synced   $home_path (filtered)"
+  else
+    echo "  synced   $home_path"
+  fi
+  synced=$((synced + 1))
+done <<EOF
+$mappings
+EOF
+echo "$synced captured, $missing absent"
 
-echo "Skipped .gitconfig and .npmrc; review them manually before committing to this public repo"
+echo "Skipped .gitconfig and .npmrc; neither installer applies them, so they stay hand-managed"
 
-# Nested config files
-omp_theme="$HOME/.config/ohmyposh/mrdemonwolf.omp.json"
-[ -f "$omp_theme" ] && sync_file "$omp_theme" "$CONFIG_DIR/.config/ohmyposh/mrdemonwolf.omp.json"
-
-ghostty_config="$HOME/Library/Application Support/com.mitchellh.ghostty/config"
-[ -f "$ghostty_config" ] && sync_file "$ghostty_config" "$CONFIG_DIR/.config/ghostty/config"
-
-# Custom scripts. These are shell scripts, so they carry the same absolute-path
-# hazard as the dotfiles and go through the same filter.
-if [ -d "$HOME/.scripts" ]; then
-  for script in "$HOME/.scripts/"*; do
-    [ -f "$script" ] && sync_file "$script" "$CONFIG_DIR/.scripts/$(basename "$script")"
-  done
-  echo "Synced .scripts/"
+# Homebrew is macOS-only here; the Ubuntu boxes get their packages from apt in
+# server-dev.sh, which has no equivalent lockfile to refresh.
+if [ "$OS" != "Darwin" ]; then
+  echo "Done! Review changes with: git diff"
+  exit 0
 fi
 
 # Merge current system into the Brewfile.
