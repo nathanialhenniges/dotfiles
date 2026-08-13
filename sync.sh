@@ -3,6 +3,9 @@
 DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_DIR="$DOTFILES_DIR/config"
 
+# shellcheck source=lib/bootstrap.sh
+source "$DOTFILES_DIR/lib/bootstrap.sh"
+
 files=(
   ".zshrc"
   ".zprofile"
@@ -15,14 +18,21 @@ files=(
 # Lines that must never be committed, matched per-file. Nuxt writes a
 # machine-specific telemetry.seed into ~/.nuxtrc on first run; without this
 # filter it comes straight back on the next sync after being removed.
-declare -A strip_patterns=(
-  [".nuxtrc"]='^telemetry\.seed='
-)
+#
+# ponytail: a case, not an associative array. macOS still ships bash 3.2, which
+# has no `declare -A`, so this whole loop was aborting with a syntax error and
+# nothing on the Mac had actually been syncing.
+strip_pattern_for() {
+  case "$1" in
+    .nuxtrc) printf '%s' '^telemetry\.seed=' ;;
+  esac
+}
 
 for file in "${files[@]}"; do
   if [ -f "$HOME/$file" ]; then
-    if [[ -n "${strip_patterns[$file]:-}" ]]; then
-      grep -v -E "${strip_patterns[$file]}" "$HOME/$file" > "$CONFIG_DIR/$file"
+    strip_pattern="$(strip_pattern_for "$file")"
+    if [ -n "$strip_pattern" ]; then
+      grep -v -E "$strip_pattern" "$HOME/$file" > "$CONFIG_DIR/$file"
       echo "Synced $file (filtered)"
     else
       cp "$HOME/$file" "$CONFIG_DIR/$file"
@@ -46,8 +56,22 @@ if [ -d "$HOME/.scripts" ]; then
   cp "$HOME/.scripts/"* "$CONFIG_DIR/.scripts/" 2>/dev/null && echo "Synced .scripts/"
 fi
 
-# Regenerate Brewfile
-brew bundle dump --force --file="$DOTFILES_DIR/Brewfile"
-echo "Brewfile updated"
+# Merge current system into the Brewfile.
+#
+# ponytail: union, never subtract. A plain `brew bundle dump --force` rewrites
+# the Brewfile to whatever this one Mac happens to have right now, so anything
+# installed on another machine — or temporarily uninstalled here — silently
+# disappears from the repo and never gets reinstalled on a rebuild. Entries are
+# only ever added. Remove one by editing the Brewfile by hand.
+brewfile="$DOTFILES_DIR/Brewfile"
+dump="$(mktemp)"
+merged="$(mktemp)"
+trap 'rm -f "$dump" "$merged"' EXIT
+
+brew bundle dump --force --file="$dump"
+merge_brewfile "$brewfile" "$dump" "$merged"
+added=$(comm -13 <(sort "$brewfile") <(sort "$merged") | wc -l | tr -d ' ')
+mv -f "$merged" "$brewfile"
+echo "Brewfile merged ($added added, 0 removed)"
 
 echo "Done! Review changes with: git diff"

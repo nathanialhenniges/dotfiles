@@ -8,6 +8,47 @@ substep() { echo "    $*"; }
 # Sets global OS to the kernel name (Darwin / Linux).
 detect_os() { OS="$(uname -s)"; }
 
+# merge_brewfile EXISTING DUMP OUT
+#
+# Union a `brew bundle dump` into an existing Brewfile. Entries are only ever
+# added — anything already recorded survives even when this machine no longer
+# has it installed.
+#
+# ponytail: the obvious version is `brew bundle dump --force` straight over the
+# Brewfile, and it quietly deletes. The repo describes every machine; the dump
+# describes the one you happen to be sitting at. Run it on a Mac that never had
+# Raycast and Raycast is gone from the rebuild list forever, with nothing in the
+# diff to explain why. To drop an entry, edit the Brewfile by hand.
+merge_brewfile() {
+  local existing=$1 dump=$2 out=$3
+  local keys grouped entry key kind
+
+  # Key = the entry minus its trailing options, so `tap "x"` and
+  # `tap "x", trusted: true` are one entry and the recorded form wins.
+  keys="$(mktemp)"
+  sed -E 's/^([a-z]+ "[^"]*").*/\1/' "$existing" | grep -E '^[a-z]+ "' > "$keys"
+
+  cp "$existing" "$out"
+  while IFS= read -r entry; do
+    case "$entry" in ''|'#'*) continue ;; esac
+    key="$(printf '%s\n' "$entry" | sed -E 's/^([a-z]+ "[^"]*").*/\1/')"
+    grep -Fxq "$key" "$keys" && continue
+    printf '%s\n' "$entry" >> "$out"
+    printf '%s\n' "$key" >> "$keys"
+  done < "$dump"
+  rm -f "$keys"
+
+  # Regroup so an added line lands with its own kind instead of at the bottom,
+  # where it would churn every later diff. Anything that is not one of the five
+  # known kinds is preserved verbatim at the end rather than dropped.
+  grouped="$(mktemp)"
+  for kind in tap brew cask mas npm vscode; do
+    { grep -E "^${kind} " "$out" || true; } | sort -u
+  done > "$grouped"
+  { grep -vE '^(tap|brew|cask|mas|npm|vscode) |^[[:space:]]*$' "$out" || true; } >> "$grouped"
+  mv -f "$grouped" "$out"
+}
+
 # Install base packages. macOS via Homebrew (installed if missing), Linux via apt.
 install_base_packages() {
   log "Installing packages..."
