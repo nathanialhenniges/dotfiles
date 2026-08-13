@@ -28,14 +28,42 @@ strip_pattern_for() {
   esac
 }
 
+# Rewrite this machine's home directory back to a literal $HOME, so a file
+# captured on the Mac still works on the Ubuntu boxes.
+#
+# ponytail: one sed over everything, not a per-file rule. Installers append
+# absolute paths — `export PATH="/Users/you/.local/bin:$PATH"` — and committed
+# as-is they are dead weight on Linux, where that path does not exist. There is
+# no case where the literal home prefix is the thing we wanted to record.
+# The character class keeps the rewrite off a path that merely starts with the
+# home string — /Users/you-old stays put, /Users/you" and /Users/you/bin do not.
+portable_filter() {
+  sed -e "s|${HOME}\([^A-Za-z0-9_.-]\)|\$HOME\1|g" \
+      -e "s|${HOME}\$|\$HOME|g"
+}
+
+sync_file() { # source destination [strip_pattern]
+  local source=$1 destination=$2 pattern=${3:-}
+  mkdir -p "$(dirname "$destination")"
+  if [ -n "$pattern" ]; then
+    grep -v -E "$pattern" "$source" | portable_filter > "$destination"
+  else
+    portable_filter < "$source" > "$destination"
+  fi
+  # Filtering writes a fresh file, so the mode does not come along the way it
+  # would with cp. Git tracks the executable bit and install.sh copies it back
+  # out, so losing it here would ship ~/.scripts/* unrunnable.
+  [ -x "$source" ] && chmod +x "$destination"
+  return 0
+}
+
 for file in "${files[@]}"; do
   if [ -f "$HOME/$file" ]; then
     strip_pattern="$(strip_pattern_for "$file")"
+    sync_file "$HOME/$file" "$CONFIG_DIR/$file" "$strip_pattern"
     if [ -n "$strip_pattern" ]; then
-      grep -v -E "$strip_pattern" "$HOME/$file" > "$CONFIG_DIR/$file"
       echo "Synced $file (filtered)"
     else
-      cp "$HOME/$file" "$CONFIG_DIR/$file"
       echo "Synced $file"
     fi
   fi
@@ -44,16 +72,19 @@ done
 echo "Skipped .gitconfig and .npmrc; review them manually before committing to this public repo"
 
 # Nested config files
-mkdir -p "$CONFIG_DIR/.config/ohmyposh"
-cp "$HOME/.config/ohmyposh/mrdemonwolf.omp.json" "$CONFIG_DIR/.config/ohmyposh/" 2>/dev/null
+omp_theme="$HOME/.config/ohmyposh/mrdemonwolf.omp.json"
+[ -f "$omp_theme" ] && sync_file "$omp_theme" "$CONFIG_DIR/.config/ohmyposh/mrdemonwolf.omp.json"
 
-mkdir -p "$CONFIG_DIR/.config/ghostty"
-cp "$HOME/Library/Application Support/com.mitchellh.ghostty/config" "$CONFIG_DIR/.config/ghostty/config" 2>/dev/null
+ghostty_config="$HOME/Library/Application Support/com.mitchellh.ghostty/config"
+[ -f "$ghostty_config" ] && sync_file "$ghostty_config" "$CONFIG_DIR/.config/ghostty/config"
 
-# Custom scripts
+# Custom scripts. These are shell scripts, so they carry the same absolute-path
+# hazard as the dotfiles and go through the same filter.
 if [ -d "$HOME/.scripts" ]; then
-  mkdir -p "$CONFIG_DIR/.scripts"
-  cp "$HOME/.scripts/"* "$CONFIG_DIR/.scripts/" 2>/dev/null && echo "Synced .scripts/"
+  for script in "$HOME/.scripts/"*; do
+    [ -f "$script" ] && sync_file "$script" "$CONFIG_DIR/.scripts/$(basename "$script")"
+  done
+  echo "Synced .scripts/"
 fi
 
 # Merge current system into the Brewfile.
