@@ -113,7 +113,12 @@ bindkey "^[[B" history-search-forward
 [[ -f ~/.secrets ]] && source ~/.secrets
 eval "$(direnv hook zsh)"
 
-# User-installed CLI paths. Keep these HOME-relative for macOS and Linux.
-export PATH="$HOME/.local/bin:$PATH"
-[[ -d "$HOME/.antigravity/antigravity/bin" ]] && export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
-[[ -d "$HOME/.lmstudio/bin" ]] && export PATH="$PATH:$HOME/.lmstudio/bin"
+# User-installed CLI paths. Keep these HOME-relative for macOS and Linux. The
+# PATH checks matter because .zprofile sets the same entries for login shells
+# and then this file runs straight after, which would otherwise double them up.
+[[ -d "$HOME/.local/bin" && ":$PATH:" != *":$HOME/.local/bin:"* ]] && \
+  export PATH="$HOME/.local/bin:$PATH"
+[[ -d "$HOME/.antigravity/antigravity/bin" && ":$PATH:" != *":$HOME/.antigravity/antigravity/bin:"* ]] && \
+  export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
+[[ -d "$HOME/.lmstudio/bin" && ":$PATH:" != *":$HOME/.lmstudio/bin:"* ]] && \
+  export PATH="$PATH:$HOME/.lmstudio/bin"
