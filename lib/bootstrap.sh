@@ -8,6 +8,75 @@ substep() { echo "    $*"; }
 # Sets global OS to the kernel name (Darwin / Linux).
 detect_os() { OS="$(uname -s)"; }
 
+# Managed dotfiles as `repo_path:home_path`, one per line.
+#
+# These mirror the mapping tables inside install.sh (macOS) and
+# linux-desktop.sh (Linux), which own the apply direction. sync.sh reads them
+# for the capture direction, so the two stay exact inverses: a file the
+# installer writes is a file sync reads back, and nothing else is captured.
+#
+# ponytail: the data lives in one place, not three. The apply tables cannot be
+# shared outright without editing two security-hardened scripts, so
+# tests/test_sync_mappings.sh fails if these ever drift from the real ones.
+#
+# .gitconfig and .npmrc are deliberately absent. Neither installer applies them,
+# and sync must not push a personal identity file to a public repo.
+macos_mappings() {
+  cat <<'EOF'
+config/.zshrc:.zshrc
+config/.zprofile:.zprofile
+config/.p10k.zsh:.p10k.zsh
+config/.profile:.profile
+config/.aliases:.aliases
+config/.nuxtrc:.nuxtrc
+config/.config/ohmyposh/mrdemonwolf.omp.json:.config/ohmyposh/mrdemonwolf.omp.json
+config/.config/ghostty/config:Library/Application Support/com.mitchellh.ghostty/config
+config/.scripts/new-video:.scripts/new-video
+config/.scripts/obs-backup:.scripts/obs-backup
+config/.scripts/yt-video-backup:.scripts/yt-video-backup
+EOF
+}
+
+linux_mappings() {
+  cat <<'EOF'
+profiles/linux-desktop/.zshrc:.zshrc
+profiles/linux-desktop/.aliases:.aliases
+profiles/linux-desktop/.config/ghostty/config:.config/ghostty/config
+config/.config/ohmyposh/mrdemonwolf.omp.json:.config/ohmyposh/mrdemonwolf.omp.json
+EOF
+}
+
+# mappings_for_os [PROFILE]
+#
+# Echoes the mapping table for the running OS. Linux needs PROFILE spelled out,
+# because two very different kinds of Linux box read this repo: the desktop
+# profile above, and the server/devbox profile that server-dev.sh applies from
+# config/server as a whole directory.
+#
+# ponytail: an explicit flag, not a heuristic. Guessing "desktop or server?"
+# from the environment is the kind of check that is right until the day it is
+# not, and being wrong here means capturing a devbox's shell config over the
+# desktop profile — a mess to unpick from a diff you were not expecting.
+# config/server is applied wholesale by server.sh and is not captured at all.
+mappings_for_os() {
+  local profile="${1:-}"
+  case "$(uname -s)" in
+    Darwin) macos_mappings ;;
+    Linux)
+      case "$profile" in
+        linux-desktop) linux_mappings ;;
+        '')
+          echo "error: on Linux, name the profile: sync.sh --profile linux-desktop" >&2
+          echo "       (server and devbox configs are applied by server-dev.sh, not captured)" >&2
+          return 1
+          ;;
+        *) echo "error: unknown profile: $profile" >&2; return 1 ;;
+      esac
+      ;;
+    *) echo "error: unsupported platform: $(uname -s)" >&2; return 1 ;;
+  esac
+}
+
 # merge_brewfile EXISTING DUMP OUT
 #
 # Union a `brew bundle dump` into an existing Brewfile. Entries are only ever
