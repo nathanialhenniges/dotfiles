@@ -79,8 +79,13 @@ server, devbox, or agent installers.
 For a direct checkout on either macOS or Ubuntu Desktop, use the guarded updater:
 
 ```bash
+# macOS
 ./update.sh --dry-run
 ./update.sh
+
+# Ubuntu Desktop — the profile must be named
+./update.sh --profile linux-desktop --dry-run
+./update.sh --profile linux-desktop
 ```
 
 It requires the exact `nathanialhenniges/dotfiles` origin, the `main` branch,
@@ -89,15 +94,30 @@ pushes. Ubuntu runs only `linux-desktop.sh`; macOS runs the explicit
 apply-only list without Homebrew, packages, plugins, or Node setup. Existing
 macOS files receive a one-time adjacent `.backup` that later runs preserve.
 
+**Linux requires `--profile`.** A server or devbox provisioned by
+`server-dev.sh` runs the `config/server` profile, and a bare run would assume
+desktop and overwrite its shell config with the wrong file. Do not pass
+`--profile linux-desktop` on a server or devbox.
+
 Sync your current system dotfiles into the repo:
 
 ```bash
+# macOS
 ./sync.sh
+
+# Ubuntu Desktop
+./sync.sh --profile linux-desktop
 ```
 
-For public-repo safety, the sync intentionally skips `.gitconfig` and `.npmrc`.
-Review and update those files manually so machine IDs or registry tokens cannot
-be copied by accident.
+Sync captures per OS from the same mapping tables the installers apply from:
+macOS writes `config/`, an Ubuntu desktop writes `profiles/linux-desktop/`.
+Server and devbox configs are applied wholesale by `server-dev.sh` and are
+never captured, so Linux requires `--profile` here too.
+
+Absolute home paths are rewritten to `$HOME` on capture, so a file recorded on
+the Mac still works on the Ubuntu boxes. For public-repo safety, the sync
+intentionally skips `.gitconfig` and `.npmrc`. Review and update those files
+manually so machine IDs or registry tokens cannot be copied by accident.
 
 Review the changes, then commit and push:
 
@@ -114,10 +134,11 @@ Install dotfiles onto a new machine:
 ./install.sh
 ```
 
-Add a new dotfile by editing the `files` array in `sync.sh`,
-then running `./sync.sh` to pull it in. For nested paths under
-`~/.config/`, add a `cp` command in the nested config section
-of the script.
+Add a new dotfile by adding a `repo_path:home_path` line to
+`macos_mappings` or `linux_mappings` in `lib/bootstrap.sh`, and the
+matching entry to the apply table in `install.sh` or
+`linux-desktop.sh`. `tests/test_sync_mappings.sh` fails if the two
+drift apart. Then run `./sync.sh` to pull the file in.
 
 ## Tech Stack
 
@@ -167,9 +188,13 @@ cd ~/Developer/nathanialhenniges/dotfiles
   touch server/devbox and agent setup.
 - `./update.sh` — Safely fast-forward and reapply desktop dotfiles on macOS or
   Ubuntu. Requires the trusted origin, `main`, and a clean worktree; supports
-  `--dry-run` and never commits or pushes.
-- `./sync.sh` — Pull allowlisted dotfiles from your system into the repo,
-  skip `.gitconfig` and `.npmrc`, and regenerate the Brewfile.
+  `--dry-run` and never commits or pushes. Linux requires
+  `--profile linux-desktop` so a server or devbox cannot be given the
+  desktop profile by accident.
+- `./sync.sh` — Pull the managed dotfiles for the current OS into the repo,
+  rewrite absolute home paths to `$HOME`, skip `.gitconfig` and `.npmrc`, and
+  merge the Brewfile without ever dropping an entry. Linux requires
+  `--profile linux-desktop`.
 - `./install.sh` — Install Homebrew (macOS) or apt essentials
   (Linux), Oh My Zsh + plugins, copy dotfiles, and set up
   Node.js via fnm.

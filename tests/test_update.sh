@@ -90,7 +90,31 @@ fi
 
 linux_home="$test_root/linux-home"
 mkdir -p "$linux_home"
-linux_output="$(env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$linux_home" "$fixture/update.sh" --dry-run)"
+
+# A bare Linux run must refuse. mrdemonwolf-dev and kommit-dev are Linux but run
+# the server profile, so assuming "desktop" would overwrite their shell config
+# with 100+ lines of the wrong file.
+if bare_linux="$(env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$linux_home" \
+    "$fixture/update.sh" --dry-run 2>&1)"; then
+  fail "bare Linux run was accepted without --profile: $bare_linux"
+fi
+[[ "$bare_linux" == *"name the profile"* ]] || fail "Linux refusal did not explain itself: $bare_linux"
+[[ -z "$(find "$linux_home" -mindepth 1 -print -quit)" ]] || fail "refused Linux run wrote to HOME"
+
+if bad_profile="$(env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$linux_home" \
+    "$fixture/update.sh" --profile server --dry-run 2>&1)"; then
+  fail "unknown Linux profile was accepted: $bad_profile"
+fi
+
+# macOS must keep working with no flag at all.
+mac_noflag_home="$test_root/mac-noflag"
+mkdir -p "$mac_noflag_home"
+mac_noflag="$(env PATH="$fake_bin:$PATH" HOME="$mac_noflag_home" "$fixture/update.sh" --dry-run 2>&1)" || \
+  fail "macOS dry run started requiring a profile"
+[[ "$mac_noflag" == *"No files changed"* ]] || fail "macOS dry run regressed: $mac_noflag"
+
+linux_output="$(env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$linux_home" \
+  "$fixture/update.sh" --profile linux-desktop --dry-run)"
 [[ "$linux_output" == *"would apply .zshrc"* && "$linux_output" == *"No files changed"* && \
    "$linux_output" != *"Library/Application Support"* ]] || \
   fail "Linux updater did not dispatch only the desktop profile: $linux_output"
