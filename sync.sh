@@ -106,6 +106,11 @@ echo "Skipped .gitconfig and .npmrc; neither installer applies them, so they sta
 # Homebrew is macOS-only here; the Ubuntu boxes get their packages from apt in
 # server-dev.sh, which has no equivalent lockfile to refresh.
 if [ "$OS" != "Darwin" ]; then
+  # Say so rather than exiting 0 in silence. A flag that is quietly ignored
+  # reads as "ran fine, nothing to prune", which is the opposite of the truth.
+  if [ "$prune" = true ]; then
+    echo "Note: --prune had nothing to do. The Brewfile is macOS-only and this is $OS."
+  fi
   echo "Done! Review changes with: git diff"
   exit 0
 fi
@@ -124,7 +129,7 @@ trap 'rm -f "$dump" "$merged"' EXIT
 
 brew bundle dump --force --file="$dump"
 merge_brewfile "$brewfile" "$dump" "$merged"
-added=$(comm -13 <(sort "$brewfile") <(sort "$merged") | wc -l | tr -d ' ')
+added=$(comm -13 <(LC_ALL=C sort "$brewfile") <(LC_ALL=C sort "$merged") | wc -l | tr -d ' ')
 mv -f "$merged" "$brewfile"
 echo "Brewfile merged ($added added, 0 removed)"
 

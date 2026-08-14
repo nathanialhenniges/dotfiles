@@ -188,11 +188,17 @@ merge_brewfile() {
   rm -f "$keys"
 
   # Regroup so an added line lands with its own kind instead of at the bottom,
-  # where it would churn every later diff. Anything that is not one of the five
+  # where it would churn every later diff. Anything that is not one of the six
   # known kinds is preserved verbatim at the end rather than dropped.
+  #
+  # LC_ALL=C is not decoration. Collation is locale-dependent: under en_US.UTF-8
+  # `sort` reads `docker-compose` before `docker`, under C it is the other way
+  # around. Without it the Brewfile reorders depending on which machine — or
+  # even which shell — ran the sync, and the Mac and the Linux desktop rewrite
+  # each other's ordering forever with a diff that never means anything.
   grouped="$(mktemp)"
   for kind in tap brew cask mas npm vscode; do
-    { grep -E "^${kind} " "$out" || true; } | sort -u
+    { grep -E "^${kind} " "$out" || true; } | LC_ALL=C sort -u
   done > "$grouped"
   { grep -vE '^(tap|brew|cask|mas|npm|vscode) |^[[:space:]]*$' "$out" || true; } >> "$grouped"
   mv -f "$grouped" "$out"

@@ -71,5 +71,21 @@ check "grouped by kind" "tap brew cask mas npm vscode " "$order"
 merge_brewfile "$TMP/out" "$TMP/dump" "$TMP/out2"
 check "idempotent" 0 "$(diff "$TMP/out" "$TMP/out2" | wc -l | tr -d ' ')"
 
+# Ordering must not depend on the caller's locale. Collation differs between
+# C and en_US.UTF-8 — the latter sorts `docker-compose` before `docker` — so an
+# unpinned sort makes the Mac and the Linux desktop rewrite each other's
+# ordering on every sync, forever, with a diff that never means anything.
+cat > "$TMP/locale-in" <<'EOF'
+brew "docker"
+brew "docker-compose"
+cask "claude"
+cask "claude-code@latest"
+EOF
+: > "$TMP/empty-dump"
+LC_ALL=C          merge_brewfile "$TMP/locale-in" "$TMP/empty-dump" "$TMP/loc-c"
+LC_ALL=en_US.UTF-8 merge_brewfile "$TMP/locale-in" "$TMP/empty-dump" "$TMP/loc-utf8"
+check "order is locale-independent" 0 "$(diff "$TMP/loc-c" "$TMP/loc-utf8" | wc -l | tr -d ' ')"
+check "byte order, not collation" 'brew "docker"' "$(head -1 "$TMP/loc-utf8")"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]
