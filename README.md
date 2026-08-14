@@ -368,6 +368,25 @@ Replicates the Claude Code + Codex setup on the box (implies
 `--ai` (and therefore `--agent-setup`) also installs
 `bubblewrap`, which Codex needs for its Linux sandbox.
 
+### Global agent instructions (`config/agent/rules/`)
+
+Rules that every agent on every box should follow live in
+`config/agent/rules/`. They are the canonical copy, kept under version
+control so all three machines can be brought back into agreement.
+
+They are **not** in the sync or apply mapping tables, and that is
+deliberate. Both destinations already hold content nobody else owns:
+`~/.claude/CLAUDE.md` on the Mac carries 200+ lines of project notes, and
+`~/.codex/AGENTS.md` is hand-written per machine. An installer that copied
+over either would delete work no backup would obviously explain. Paste a
+rule in by hand when you add or change one.
+
+Current rules:
+
+- `remove-ai-marks.md` — always strip AI provenance marks (invisible
+  Unicode, C2PA/EXIF/XMP) from docs, copy, and media before publishing.
+  Never over source code.
+
 Existing `settings.json` / `config.toml` are backed up to
 `*.backup` first.
 
