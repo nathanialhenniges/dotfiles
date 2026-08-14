@@ -12,15 +12,20 @@ DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DOTFILES_DIR/lib/bootstrap.sh"
 
 profile=""
+prune=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --profile) profile="${2:-}"; shift 2 ;;
+    --prune) prune=true; shift ;;
     -h|--help)
-      echo "Usage: ./sync.sh [--profile linux-desktop]"
+      echo "Usage: ./sync.sh [--profile linux-desktop] [--prune]"
       echo
       echo "Captures this machine's managed dotfiles into the repo. macOS needs"
       echo "no flag. Linux requires --profile, since the server and devbox"
       echo "configs are applied by server-dev.sh and are never captured."
+      echo
+      echo "The Brewfile merge only ever adds. Entries no longer installed here"
+      echo "are reported at the end of every run; --prune removes them."
       exit 0
       ;;
     *) echo "error: unknown option: $1" >&2; exit 1 ;;
@@ -122,5 +127,31 @@ merge_brewfile "$brewfile" "$dump" "$merged"
 added=$(comm -13 <(sort "$brewfile") <(sort "$merged") | wc -l | tr -d ' ')
 mv -f "$merged" "$brewfile"
 echo "Brewfile merged ($added added, 0 removed)"
+
+# Because the merge never subtracts, the Brewfile rots silently: an app you
+# uninstalled a year ago is still queued for the next machine you build, and
+# nothing ever says so. Report it every run; only remove when asked.
+orphans="$(mktemp)"
+trap 'rm -f "$dump" "$merged" "$orphans"' EXIT
+brewfile_orphans "$brewfile" > "$orphans"
+orphan_count=$(wc -l < "$orphans" | tr -d ' ')
+
+if [ "$orphan_count" -eq 0 ]; then
+  echo "Brewfile is clean: every entry is installed here."
+elif [ "$prune" = true ]; then
+  pruned="$(mktemp)"
+  prune_brewfile "$brewfile" "$pruned"
+  mv -f "$pruned" "$brewfile"
+  echo "Brewfile pruned ($orphan_count removed):"
+  sed 's/^/    - /' "$orphans"
+  echo "  Removed only from the rebuild list. Nothing was uninstalled."
+else
+  echo
+  echo "  $orphan_count Brewfile entr$([ "$orphan_count" -eq 1 ] && echo y || echo ies) not installed on this machine:"
+  sed 's/^/    /' "$orphans"
+  echo
+  echo "  Keep them if you still want them on the next machine you build."
+  echo "  Drop them with: ./sync.sh --prune"
+fi
 
 echo "Done! Review changes with: git diff"
