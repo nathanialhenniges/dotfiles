@@ -77,6 +77,86 @@ mappings_for_os() {
   esac
 }
 
+# brewfile_orphans BREWFILE
+#
+# Prints every Brewfile entry that is not installed on this machine, one per
+# line, verbatim. The counterpart to merge_brewfile: the merge never removes,
+# so without this the file only ever grows and quietly rots.
+#
+# ponytail: reports, never deletes. A Brewfile is a rebuild wishlist, not an
+# inventory — an entry missing here is often deliberate (an app you want on the
+# next machine but not this one). Only the human knows which, so sync.sh prints
+# the list and --prune is a separate, explicit keystroke.
+#
+# A category whose query tool is absent is skipped entirely rather than reported
+# as orphaned. Without that, running on a box with no `code` on PATH would call
+# all 42 VS Code extensions dead and invite you to delete every one of them.
+brewfile_orphans() {
+  local brewfile=$1
+  local installed name short
+
+  # brew is a hard requirement; without it nothing can be judged installed and
+  # reporting every entry as an orphan would be actively dangerous.
+  command -v brew >/dev/null 2>&1 || return 0
+
+  # ponytail: explicit rm, not `trap ... RETURN`. A RETURN trap fires in the
+  # caller's scope once this returns, so prune_brewfile blew up on an unbound
+  # $installed under `set -u` — a leak that only shows when someone composes
+  # the two functions.
+  installed="$(mktemp)"
+
+  brew list --formula 2>/dev/null | sed 's/^/formula /' >> "$installed"
+  brew list --cask    2>/dev/null | sed 's/^/cask /'    >> "$installed"
+  if command -v code >/dev/null 2>&1; then
+    code --list-extensions 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/^/vscode /' >> "$installed"
+  fi
+  if command -v mas >/dev/null 2>&1; then
+    mas list 2>/dev/null | awk '{print "mas " $1}' >> "$installed"
+  fi
+  if command -v npm >/dev/null 2>&1; then
+    npm ls -g --depth=0 --parseable 2>/dev/null |
+      awk -F/ 'NR>1 {print "npm " ($(NF-1) ~ /^@/ ? $(NF-1) "/" $NF : $NF)}' >> "$installed"
+  fi
+
+  while IFS= read -r entry; do
+    case "$entry" in
+      # Taps are pulled in by the formulae that need them, never "missing".
+      tap\ *|''|'#'*) continue ;;
+      brew\ *)   name=$(printf '%s' "$entry" | sed 's/^brew "//; s/".*//');   short="formula ${name##*/}" ;;
+      cask\ *)   name=$(printf '%s' "$entry" | sed 's/^cask "//; s/".*//');   short="cask ${name##*/}" ;;
+      vscode\ *) name=$(printf '%s' "$entry" | sed 's/^vscode "//; s/".*//' | tr 'A-Z' 'a-z'); short="vscode $name" ;;
+      mas\ *)    command -v mas  >/dev/null 2>&1 || continue
+                 short="mas $(printf '%s' "$entry" | sed 's/.*id: *//')" ;;
+      npm\ *)    command -v npm  >/dev/null 2>&1 || continue
+                 short="npm $(printf '%s' "$entry" | sed 's/^npm "//; s/".*//')" ;;
+      *) continue ;;
+    esac
+    case "$short" in
+      "vscode "*) command -v code >/dev/null 2>&1 || continue ;;
+    esac
+    grep -Fxq "$short" "$installed" || printf '%s\n' "$entry"
+  done < "$brewfile"
+
+  rm -f "$installed"
+}
+
+# prune_brewfile BREWFILE OUT
+#
+# Writes BREWFILE to OUT with every orphaned entry removed. Only ever called
+# behind an explicit --prune; sync.sh's default is to report and change nothing.
+prune_brewfile() {
+  local brewfile=$1 out=$2
+  local orphans
+  orphans="$(mktemp)"
+  brewfile_orphans "$brewfile" > "$orphans"
+  if [ -s "$orphans" ]; then
+    grep -Fxv -f "$orphans" "$brewfile" > "$out"
+  else
+    cp "$brewfile" "$out"
+  fi
+  rm -f "$orphans"
+}
+
 # merge_brewfile EXISTING DUMP OUT
 #
 # Union a `brew bundle dump` into an existing Brewfile. Entries are only ever
