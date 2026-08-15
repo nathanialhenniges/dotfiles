@@ -17,6 +17,7 @@ Your terminal is your workshop. Keep it sharp.
   before being overwritten during installation.
 - **Brewfile** — Every Homebrew package, cask, Mac App Store
   app, and VS Code extension tracked in a single file.
+- **Chrome Remote Desktop** — The Brewfile installs the host. After `brew bundle`, log out of macOS and back in, visit `https://remotedesktop.google.com/access`, enable remote access, name the Mac, set a strong PIN, and grant the requested Accessibility and Screen Recording permissions. Connect from Ubuntu through the same site and remember the PIN only on a trusted device.
 - **Secrets management** — API keys and tokens stay in
   `~/.secrets`, which is never committed to git.
 
@@ -289,7 +290,7 @@ sets up, plus a full development toolchain:
 bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/main/server-dev.sh)
 ```
 
-> ### ⚠️ This does not harden the machine
+> ### ⚠ This does not harden the machine
 >
 > `server-dev.sh` does **not** touch `sshd`, does **not** configure a
 > firewall, and does **not** install fail2ban, sysctl hardening, or
