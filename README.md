@@ -215,6 +215,30 @@ cd ~/Developer/nathanialhenniges/dotfiles
 - `./sharedhosting.sh` — Bootstrap a shared hosting environment
   (no root required, bash-based) with configs from `config/sharedhosting/`.
 
+### Failure modes this repo has already hit
+
+Every one of these exited 0 while doing nothing, or did the wrong thing
+without saying so. That is the pattern to design against here: **prefer a
+loud refusal to a quiet no-op.** All are fixed and covered by `tests/`.
+
+| What broke | Why it stayed hidden |
+| --- | --- |
+| `sync.sh` never ran on macOS | `declare -A` is a bash 4 feature and macOS ships 3.2. The loop aborted on a syntax error and the script still exited 0. |
+| `brew bundle dump --force` deleted Brewfile entries | The dump only knows the machine running it, so another Mac's apps vanished with nothing in the diff to explain why. |
+| Captures wrote `/Users/...` absolute paths | Valid on the Mac, dead weight on Ubuntu, and the file looked fine either way. |
+| `update.sh` would apply the desktop profile to a devbox | Linux is not one thing. `mrdemonwolf-dev` and `kommit-dev` run the server profile. |
+| Brewfile reordered on every sync | `sort` collation is locale-dependent: `en_US.UTF-8` puts `docker-compose` before `docker`, `C` reverses it. |
+| `--prune` did nothing on Linux | The Brewfile section is macOS-only and the flag was silently ignored, which reads as "nothing to prune". |
+
+Two rules fall out of that list, and both are enforced in code:
+
+- **Never guess between profiles.** `--profile` is required on Linux for both
+  `sync.sh` and `update.sh`. Auto-detection would be right until it was not,
+  and the two scripts disagreeing would be worse than either answer.
+- **Never report absence you cannot verify.** A category whose query tool is
+  missing is skipped, not reported. Otherwise a box without `code` on `PATH`
+  calls every VS Code extension dead and offers to delete them.
+
 ## Project Structure
 
 ```
