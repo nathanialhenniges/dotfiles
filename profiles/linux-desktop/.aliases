@@ -13,3 +13,8 @@ else
   alias ll='ls -lhF'
   alias la='ls -lahF'
 fi
+
+# Chrome Remote Desktop host conflicts with local GNOME. Start only from TTY after logout.
+alias crd-start-tty='/opt/google/chrome-remote-desktop/chrome-remote-desktop --start'
+alias crd-status='/opt/google/chrome-remote-desktop/chrome-remote-desktop --get-status'
+alias crd-stop='/opt/google/chrome-remote-desktop/chrome-remote-desktop --stop'
