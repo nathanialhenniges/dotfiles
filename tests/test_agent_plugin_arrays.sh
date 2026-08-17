@@ -14,7 +14,8 @@
 set -u
 
 SCRIPT="${1:-$HOME/Developer/nathanialhenniges/dotfiles/server-dev.sh}"
-SETTINGS="$(dirname "$SCRIPT")/config/agent/claude/settings.json"
+ROOT="$(dirname "$SCRIPT")"
+SETTINGS="$ROOT/config/agent/claude/settings.json"
 
 # Pull in only the arrays and the two functions — sourcing server-dev.sh whole
 # would run the installer.
@@ -195,6 +196,19 @@ check "only-branch runs before create_home_dirs" "yes" \
 check "listed in --help"        "yes" "$(grep -q -- '--agent-setup-only        run ONLY' "$SCRIPT" && echo yes || echo no)"
 check "listed in unknown-opt hint" "yes" "$(grep -q -- 'Try: --ai, --pnpm, --agent-setup, --agent-setup-only' "$SCRIPT" && echo yes || echo no)"
 check "offered in the failure summary" "yes" "$(grep -q 'RAW_URL) --agent-setup-only' "$SCRIPT" && echo yes || echo no)"
+
+echo ""
+echo "== both skill packs restore =="
+check "Codex skills copied" "yes" \
+  "$(grep -Fq 'cp -R "$agent_dir/codex/skills/." "$HOME/.codex/skills/"' "$SCRIPT" && echo yes || echo no)"
+check "shared index recreated" "yes" \
+  "$(grep -Fq 'done < "$agent_dir/shared-skills.tsv"' "$SCRIPT" && echo yes || echo no)"
+missing_shared=$(
+  while IFS=$'\t' read -r _ path; do
+    [ -f "$ROOT/config/agent/claude/skills/$path/SKILL.md" ] || echo "$path"
+  done < "$ROOT/config/agent/shared-skills.tsv"
+)
+check "shared index targets exist" "" "$missing_shared"
 
 echo ""
 echo "  $pass passed, $fail failed"
