@@ -72,7 +72,7 @@ Flags:
   --ai                      install Claude Code + Codex CLIs (+ bubblewrap sandbox)
   --pnpm                    install pnpm
   --agent-setup             implies --ai; also installs plugins into both CLIs,
-                            the skills pack, curated settings, and pre-registers
+                            skill packs/index, curated settings, and pre-registers
                             the Atlassian (Jira) MCP
   --agent-setup-only        run ONLY the --agent-setup step on a box this script
                             already provisioned — no apt, no Docker, no shell
@@ -630,6 +630,27 @@ agent_setup() {
   else
     cp "$agent_dir/codex/config.toml" "$HOME/.codex/config.toml"
   fi
+
+  log "Installing Codex skills..."
+  mkdir -p "$HOME/.codex/skills"
+  cp -R "$agent_dir/codex/skills/." "$HOME/.codex/skills/"
+  substep "$(ls -1 "$agent_dir/codex/skills" | wc -l | tr -d ' ') skills installed"
+
+  # Codex discovers shared skills through a flat ~/.agents/skills index. Store
+  # portable Claude-relative paths in git and recreate machine-local links.
+  log "Installing shared skill index..."
+  mkdir -p "$HOME/.agents/skills"
+  local skill_name skill_path skill_link
+  while IFS=$'\t' read -r skill_name skill_path; do
+    [ -n "$skill_name" ] || continue
+    skill_link="$HOME/.agents/skills/$skill_name"
+    if [ -e "$skill_link" ] && [ ! -L "$skill_link" ]; then
+      substep "$skill_link exists, leaving it alone"
+      continue
+    fi
+    ln -sfn "$HOME/.claude/skills/$skill_path" "$skill_link"
+  done < "$agent_dir/shared-skills.tsv"
+  substep "$(wc -l < "$agent_dir/shared-skills.tsv" | tr -d ' ') shared skills indexed"
 
   # Codex plugins — same Git marketplaces + plugin set as Claude (Codex takes
   # `plugin marketplace add owner/repo` and `plugin add name@marketplace`).
