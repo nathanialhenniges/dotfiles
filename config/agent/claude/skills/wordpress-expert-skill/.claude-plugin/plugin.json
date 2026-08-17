@@ -1,0 +1,10 @@
+{
+  "name": "wordpress-expert-skill",
+  "version": "1.0.0",
+  "description": "WordPress best-practices skill for coding, security, plugin/theme development, and performance.",
+  "author": {
+    "name": "Nathanial Henniges"
+  },
+  "skills": "./skills/",
+  "license": "MIT"
+}
