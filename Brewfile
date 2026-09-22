@@ -2,6 +2,7 @@ tap "f/textream", trusted: true
 tap "hashicorp/tap"
 tap "jandedobbeleer/oh-my-posh"
 tap "jundot/omlx", "https://github.com/jundot/omlx", trusted: true
+tap "mobile-dev-inc/tap"
 tap "mrdemonwolf/den"
 tap "oven-sh/bun"
 tap "phkiener/personal"
@@ -38,6 +39,7 @@ brew "imagemagick"
 brew "iperf3"
 brew "jandedobbeleer/oh-my-posh/oh-my-posh"
 brew "librsvg"
+brew "mobile-dev-inc/tap/maestro", trusted: true
 brew "mas"
 brew "mole"
 brew "ncdu"
