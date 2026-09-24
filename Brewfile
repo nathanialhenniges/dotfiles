@@ -1,4 +1,5 @@
 tap "f/textream", trusted: true
+tap "getsentry/tools"
 tap "hashicorp/tap"
 tap "jandedobbeleer/oh-my-posh"
 tap "jundot/omlx", "https://github.com/jundot/omlx", trusted: true
@@ -28,6 +29,7 @@ brew "fastfetch"
 brew "ffmpeg"
 brew "fnm"
 brew "fzf"
+brew "getsentry/tools/sentry-wizard"
 brew "gh"
 brew "git"
 brew "gnupg"
