@@ -1,0 +1,18 @@
+{
+  "name": "wordpress-expert-skill",
+  "version": "1.0.0",
+  "description": "WordPress expert coding skill with security-first defaults for PHP, plugin/theme work, and best practices.",
+  "author": {
+    "name": "Nathanial Henniges"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "WordPress Expert",
+    "shortDescription": "WordPress secure code guidance and implementation",
+    "longDescription": "Use modern WordPress APIs, coding standards, secure coding patterns, and performant solutions when building WordPress code.",
+    "developerName": "Nathanial Henniges",
+    "category": "Development",
+    "capabilities": ["Instructions"],
+    "defaultPrompt": "Use the WordPress Expert skill."
+  }
+}
