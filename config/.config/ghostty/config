@@ -17,15 +17,15 @@ adjust-cell-height = 2
 theme = light:Monokai Pro Octagon,dark:Monokai Pro Octagon
 
 # -- macOS 26 Liquid Glass Look ----------------------------------------------
-# Tabs integrated into the titlebar (like Warp / Safari in Tahoe)
-macos-titlebar-style = tabs
+# Keep Ghostty's native tab bar; titlebar tabs were cramped into the right edge.
+macos-titlebar-style = native
 # Follow system light/dark appearance
 window-theme = auto
 # Display P3 color space (native macOS 26 rendering)
 window-colorspace = display-p3
 
 # -- Transparency & Blur (the "glass" in Liquid Glass) -----------------------
-background-opacity = 1
+background-opacity = 0.90
 background-blur-radius = 90
 
 # -- Window ------------------------------------------------------------------
@@ -40,7 +40,7 @@ cursor-style-blink = true
 
 # -- Shell -------------------------------------------------------------------
 shell-integration = zsh
-macos-option-as-alt = true
+macos-option-as-alt = left
 
 # -- Keybindings (matching Warp shortcuts) -----------------------------------
 # Splits
@@ -69,7 +69,7 @@ keybind = cmd+minus=decrease_font_size:1
 keybind = cmd+zero=reset_font_size
 
 # -- Quick Terminal (dropdown from anywhere — uncomment to enable) -----------
-# keybind = global:cmd+grave_accent=toggle_quick_terminal
+keybind = global:cmd+grave_accent=toggle_quick_terminal
 # quick-terminal-position = top
 # quick-terminal-animation-duration = 0.15
 
