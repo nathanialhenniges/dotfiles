@@ -17,8 +17,8 @@ adjust-cell-height = 2
 theme = light:Monokai Pro Octagon,dark:Monokai Pro Octagon
 
 # -- macOS 26 Liquid Glass Look ----------------------------------------------
-# Tabs integrated into the titlebar (like Warp / Safari in Tahoe)
-macos-titlebar-style = tabs
+# Keep Ghostty's native tab bar; titlebar tabs were cramped into the right edge.
+macos-titlebar-style = native
 # Follow system light/dark appearance
 window-theme = auto
 # Display P3 color space (native macOS 26 rendering)
