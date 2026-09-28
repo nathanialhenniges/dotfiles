@@ -115,6 +115,10 @@ macOS writes `config/`, an Ubuntu desktop writes `profiles/linux-desktop/`.
 Server and devbox configs are applied wholesale by `server-dev.sh` and are
 never captured, so Linux requires `--profile` here too.
 
+Agent skills are the exception: every sync merges `~/.claude/skills/` and the
+custom portion of `~/.codex/skills/`, then refreshes the portable shared-skill
+index. Codex's CLI-owned `.system` directory and generated caches stay out.
+
 Absolute home paths are rewritten to `$HOME` on capture, so a file recorded on
 the Mac still works on the Ubuntu boxes. For public-repo safety, the sync
 intentionally skips `.gitconfig` and `.npmrc`. Review and update those files
@@ -262,8 +266,10 @@ dotfiles/
 │   │   ├── claude/
 │   │   │   ├── settings.json  # Curated Claude Code settings
 │   │   │   └── skills/        # Skills pack copied to ~/.claude/skills/
-│   │   └── codex/
-│   │       └── config.toml    # Linux-safe Codex config
+│   │   ├── codex/
+│   │   │   ├── config.toml    # Linux-safe Codex config
+│   │   │   └── skills/        # Custom skills copied to ~/.codex/skills/
+│   │   └── shared-skills.tsv  # Portable ~/.agents/skills discovery index
 │   ├── .scripts/              # Custom scripts copied to ~/.scripts/
 │   └── .config/
 │       ├── ghostty/
@@ -379,7 +385,8 @@ Replicates the Claude Code + Codex setup on the box (implies
 - Writes a curated `~/.claude/settings.json` (model, permission
   allowlist, enabled plugins) — without the machine-specific
   hooks/statusline paths from the desktop config.
-- Copies the skills pack into `~/.claude/skills/`.
+- Copies the Claude and custom Codex skill packs into `~/.claude/skills/` and
+  `~/.codex/skills/`, then recreates the shared `~/.agents/skills/` index.
 - Adds the plugin marketplaces and installs the plugins
   (`claude plugin marketplace add` / `install`).
 - Writes a Linux-safe `~/.codex/config.toml` (model + reasoning;

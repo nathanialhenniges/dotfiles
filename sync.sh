@@ -77,6 +77,37 @@ sync_file() { # source destination [strip_pattern]
   return 0
 }
 
+sync_tree() { # source destination [extra rsync options]
+  local source=$1 destination=$2
+  shift 2
+  mkdir -p "$destination"
+  rsync -aL --exclude=.DS_Store --exclude=__pycache__/ --exclude='*.pyc' \
+    "$@" "$source/" "$destination/"
+}
+
+sync_shared_skill_index() { # source destination claude_skills
+  local source=$1 destination=$2 claude_skills=$3 entry name target relative
+  mkdir -p "$(dirname "$destination")"
+  {
+    for entry in "$source"/*; do
+      [ -e "$entry" ] || [ -L "$entry" ] || continue
+      name=${entry##*/}
+      if [ -L "$entry" ]; then
+        target=$(readlink "$entry")
+        case "$target" in
+          "$claude_skills"/*) relative=${target#"$claude_skills"/} ;;
+          *) continue ;;
+        esac
+      elif [ -e "$claude_skills/$name" ]; then
+        relative=$name
+      else
+        continue
+      fi
+      printf '%s\t%s\n' "$name" "$relative"
+    done
+  } | LC_ALL=C sort > "$destination"
+}
+
 echo "Capturing the $OS profile into ${DOTFILES_DIR##*/}/"
 
 synced=0
@@ -100,6 +131,22 @@ done <<EOF
 $mappings
 EOF
 echo "$synced captured, $missing absent"
+
+# Agent skills are portable across the Mac and Linux dev boxes. Merge instead
+# of deleting so one machine cannot erase a skill installed only on another.
+if [ -d "$HOME/.claude/skills" ]; then
+  sync_tree "$HOME/.claude/skills" "$DOTFILES_DIR/config/agent/claude/skills"
+  echo "  synced   .claude/skills"
+fi
+if [ -d "$HOME/.codex/skills" ]; then
+  sync_tree "$HOME/.codex/skills" "$DOTFILES_DIR/config/agent/codex/skills" --exclude=.system/
+  echo "  synced   .codex/skills (excluding CLI-owned .system)"
+fi
+if [ -d "$HOME/.agents/skills" ]; then
+  sync_shared_skill_index "$HOME/.agents/skills" \
+    "$DOTFILES_DIR/config/agent/shared-skills.tsv" "$HOME/.claude/skills"
+  echo "  synced   .agents/skills index"
+fi
 
 echo "Skipped .gitconfig and .npmrc; neither installer applies them, so they stay hand-managed"
 

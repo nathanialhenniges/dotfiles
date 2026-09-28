@@ -58,5 +58,25 @@ check "every repo path exists" "" "$orphans"
 leaked=$({ macos_mappings; linux_mappings; } | grep -E '\.gitconfig|\.npmrc' || true)
 check "no .gitconfig or .npmrc in tables" "" "$leaked"
 
+eval "$(awk '/^sync_tree\(\)/,/^}/' "$REPO/sync.sh")"
+eval "$(awk '/^sync_shared_skill_index\(\)/,/^}/' "$REPO/sync.sh")"
+fixture=$(mktemp -d)
+trap 'rm -rf "$fixture"' EXIT
+mkdir -p "$fixture/source/nested" "$fixture/source/__pycache__" "$fixture/destination/kept"
+printf 'skill\n' > "$fixture/source/nested/SKILL.md"
+printf 'cache\n' > "$fixture/source/__pycache__/cache.pyc"
+ln -s nested "$fixture/source/linked"
+sync_tree "$fixture/source" "$fixture/destination"
+check "skill trees copy recursively" "yes" "$([ -f "$fixture/destination/nested/SKILL.md" ] && echo yes || echo no)"
+check "skill symlinks become portable files" "yes" "$([ -f "$fixture/destination/linked/SKILL.md" ] && [ ! -L "$fixture/destination/linked" ] && echo yes || echo no)"
+check "generated caches stay out" "yes" "$([ ! -e "$fixture/destination/__pycache__" ] && echo yes || echo no)"
+check "tree sync keeps repo-only skills" "yes" "$([ -d "$fixture/destination/kept" ] && echo yes || echo no)"
+
+mkdir -p "$fixture/claude/nested" "$fixture/agents"
+printf 'skill\n' > "$fixture/claude/nested/SKILL.md"
+ln -s "$fixture/claude/nested" "$fixture/agents/example"
+sync_shared_skill_index "$fixture/agents" "$fixture/shared-skills.tsv" "$fixture/claude"
+check "shared skill index stays relative" $'example\tnested' "$(cat "$fixture/shared-skills.tsv")"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]
