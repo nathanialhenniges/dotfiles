@@ -10,6 +10,7 @@ SCRIPT="${1:-$(cd "$(dirname "$0")/.." && pwd)/config/.scripts/tcc-prune}"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
+SQLITE3_BIN="$(command -v sqlite3)"
 
 check() { # name expected actual
   local name=$1 want=$2 got=$3
@@ -67,6 +68,16 @@ SQL
 
 mkdir -p "$TMP/bin"
 
+cat > "$TMP/bin/sqlite3" <<'EOF'
+#!/bin/bash
+if [[ "${FAIL_BACKUP:-0}" == "1" ]]; then
+  for arg in "$@"; do
+    [[ "$arg" == .backup\ * ]] && exit 1
+  done
+fi
+exec "$SQLITE3_BIN" "$@"
+EOF
+
 cat > "$TMP/bin/mdfind" <<'EOF'
 #!/bin/bash
 echo "$@" >> "${MDFIND_LOG:?}"
@@ -81,6 +92,11 @@ EOF
 cat > "$TMP/bin/tccutil" <<'EOF'
 #!/bin/bash
 echo "$@" >> "${TCCUTIL_LOG:?}"
+if [[ "${REQUIRE_TCC_BACKUP:-0}" == "1" ]] &&
+   ! compgen -G "${TCC_PRUNE_BACKUP_DIR:?}/TCC.db.*" >/dev/null; then
+  echo "called before backup" >> "${TCCUTIL_LOG:?}"
+  exit 1
+fi
 exit 0
 EOF
 
@@ -112,10 +128,11 @@ chmod +x "$TMP/bin/"* "$TMP/fake-lsregister"
 run_prune() { # dbfile args...
   local db="$1"; shift
   PATH="$TMP/bin:$PATH" \
+  SQLITE3_BIN="$SQLITE3_BIN" \
   TCC_PRUNE_USER_DB="$db" \
   TCC_PRUNE_SYSTEM_DB="$TMP/no-system.db" \
   TCC_PRUNE_LSREGISTER="$TMP/fake-lsregister" \
-  TCC_PRUNE_BACKUP_DIR="$TMP/backups" \
+   TCC_PRUNE_BACKUP_DIR="${BACKUP_DIR_OVERRIDE:-$TMP/backups}" \
   MDFIND_LOG="$TMP/mdfind.log" \
   TCCUTIL_LOG="$TMP/tccutil.log" \
   LAUNCHCTL_LOG="$TMP/launchctl.log" \
@@ -181,6 +198,28 @@ BACKUP=$(find "$TMP/backups" -type f -name 'TCC.db.*' 2>/dev/null | head -1)
 check "apply: backup file exists"            yes "$([[ -n "$BACKUP" ]] && echo yes || echo no)"
 check "apply: backup has pre-delete rows"    8   "$(rowcount "$BACKUP")"
 check "apply: plan manifest consumed"        no  "$([[ -f "$TMP/backups/last-plan.txt" ]] && echo yes || echo no)"
+
+# ── Bundle-only apply backs up before tccutil ──────────────────────────────
+DB_BUNDLE="$TMP/TCC-bundle-only.db"; make_db "$DB_BUNDLE"
+sqlite3 "$DB_BUNDLE" "DELETE FROM access WHERE client='$TMP/missing-bin';"
+OUT=$(BACKUP_DIR_OVERRIDE="$TMP/bundle-backups" run_prune "$DB_BUNDLE" 2>&1); RC=$?
+check "bundle-only dry run exits 0"           0 "$RC"
+: > "$TMP/tccutil.log"
+OUT=$(printf 'y\n' | BACKUP_DIR_OVERRIDE="$TMP/bundle-backups" REQUIRE_TCC_BACKUP=1 run_prune "$DB_BUNDLE" --apply 2>&1); RC=$?
+check "bundle-only apply exits 0"             0 "$RC"
+check "bundle-only apply has backup before reset" no "$(has "$(cat "$TMP/tccutil.log")" "called before backup")"
+check "bundle-only apply resets once"         1 "$(grep -c '^reset All ' "$TMP/tccutil.log" || true)"
+
+# ── Backup failure aborts before resets or database writes ─────────────────
+DB4="$TMP/TCC4.db"; make_db "$DB4"
+sqlite3 "$DB4" "DELETE FROM access WHERE client='$TMP/missing-bin';"
+OUT=$(run_prune "$DB4" 2>&1); RC=$?
+check "backup-failure dry run exits 0"        0 "$RC"
+: > "$TMP/tccutil.log"
+OUT=$(printf 'y\n' | FAIL_BACKUP=1 run_prune "$DB4" --apply 2>&1); RC=$?
+check "backup failure exits nonzero"          0 "$([[ $RC -ne 0 ]] && echo 0 || echo 1)"
+check "backup failure: no tccutil reset"      0 "$(wc -l < "$TMP/tccutil.log" | tr -d ' ')"
+check "backup failure: db unchanged"          7 "$(rowcount "$DB4")"
 
 # ── Apply with nothing stale: no-op, no confirm needed ────────────────────
 # The tccutil shim doesn't mutate the DB like the real one would, so simulate

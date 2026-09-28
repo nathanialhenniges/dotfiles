@@ -366,7 +366,7 @@ if [[ ! "${CONFIRM:-}" =~ ^[Yy]$ ]]; then
 fi
 
 FAILED=0
-if [[ ${#DELETE_PATHS[@]} -gt 0 ]]; then
+if [[ ${#DELETE_PATHS[@]} -gt 0 || ${#RESET_IDS[@]} -gt 0 ]]; then
   mkdir -p "$BACKUP_DIR"
   BACKUP_FILE="$BACKUP_DIR/TCC.db.$(date +%Y%m%d-%H%M%S)"
   # sqlite .backup is WAL-consistent; a plain cp would miss -wal contents.
