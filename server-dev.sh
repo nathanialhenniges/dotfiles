@@ -430,10 +430,15 @@ agent_try() { # <description> <command...>
     # These tools spew a whole git clone transcript, and the reason lands at the
     # END of it — a naive head-of-output would show a progress bar and a temp
     # path, which hides the error about as well as /dev/null did. Drop the
-    # progress noise, keep the last few lines, flatten, cap.
+    # progress noise, prefer the specific git error over its generic trailer,
+    # keep the last few lines, flatten, cap.
     flat=$(printf '%s\n' "$out" \
-      | grep -avE 'Updating files|Receiving objects|Resolving deltas|Cloning into|remote: (Counting|Compressing|Enumerating|Total)' \
-      | tail -n 3 | tr '\n' ' ' | tr -s ' ') || flat=$(tr '\n' ' ' <<<"$out")
+      | grep -avE 'Updating files|Receiving objects|Resolving deltas|Cloning into|remote: (Counting|Compressing|Enumerating|Total)') \
+      || flat=$out
+    if grep -qiE 'fatal:|not found' <<<"$flat"; then
+      flat=$(grep -iE 'fatal:|not found' <<<"$flat")
+    fi
+    flat=$(tail -n 3 <<<"$flat" | tr '\n' ' ' | tr -s ' ')
     substep "FAILED  $what"
     substep "        ${flat:0:240}"
     AGENT_SETUP_FAILURES+=("$what")

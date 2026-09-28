@@ -90,6 +90,15 @@ out=$(agent_try "loud-step" bash -c 'echo "fatal: repository not found"; exit 1'
 check "failure prints the error" "yes" "$(grep -q 'repository not found' <<<"$out" && echo yes || echo no)"
 check "failure is marked FAILED" "yes" "$(grep -q 'FAILED' <<<"$out" && echo yes || echo no)"
 
+out=$(agent_try "git-step" bash -c '
+  echo "fatal: repository https://github.com/expo/eval-experiments.git not found"
+  echo "Please make sure you have the correct access rights"
+  echo "and the repository exists."
+  exit 1
+')
+check "specific git error beats generic trailer" "yes" \
+  "$(grep -q 'eval-experiments.git not found' <<<"$out" && ! grep -q 'correct access rights' <<<"$out" && echo yes || echo no)"
+
 echo "== settings.json agrees with the arrays =="
 if command -v python3 >/dev/null 2>&1 && [[ -f "$SETTINGS" ]]; then
   # enabledPlugins is the declarative half of the same install: if it lists a
