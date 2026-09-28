@@ -22,6 +22,7 @@ eval "$(awk '/^portable_filter\(\) \{/,/^\}/' "$SYNC")"
 eval "$(awk '/^filter_pattern\(\) \{/,/^\}/' "$SYNC")"
 eval "$(awk '/^sync_file\(\) \{/,/^\}/' "$SYNC")"
 eval "$(awk '/^strip_local\(\) \{/,/^\}/' "$SYNC")"
+eval "$(awk '/^marker_missing\(\) \{/,/^\}/' "$SYNC")"
 eval "$(awk '/^LOCAL_MARKER=/' "$LIB")"
 eval "$(awk '/^read_local_block\(\) \{/,/^\}/' "$LIB")"
 eval "$(awk '/^copy_preserving_local\(\) \{/,/^\}/' "$LIB")"
@@ -67,6 +68,11 @@ EOF
 sync_file "$HOME/.zshrc" "$TMP/out/.zshrc"
 check "local block excluded" 0 "$(grep -c 'private/bin' "$TMP/out/.zshrc" || true)"
 check "local marker retained" 1 "$(grep -cF "$LOCAL_MARKER" "$TMP/out/.zshrc")"
+printf '%s\n' "$LOCAL_MARKER" > "$TMP/repo-marked"
+printf 'unmarked home\n' > "$TMP/home-unmarked"
+check "marked repo refuses unmarked home" yes "$(marker_missing "$TMP/repo-marked" "$TMP/home-unmarked" && echo yes || echo no)"
+printf '%s\n' "$LOCAL_MARKER" > "$TMP/home-unmarked"
+check "marked home may sync" no "$(marker_missing "$TMP/repo-marked" "$TMP/home-unmarked" && echo yes || echo no)"
 
 printf 'keep=1\n_authToken=secret\n' > "$HOME/.secret-file"
 printf 'safe=1\n' > "$TMP/out/.secret-file"
@@ -97,6 +103,12 @@ mkdir -p "$TMP/skills/source" "$TMP/skills/dest"
 printf 'ordinary skill\n' > "$TMP/skills/source/SKILL.md"
 sync_tree "$TMP/skills/source" "$TMP/skills/dest"
 check "safe skill tree syncs" yes "$( [ -f "$TMP/skills/dest/SKILL.md" ] && echo yes || echo no)"
+mkdir -p "$TMP/skills/source/nested"
+printf 'linked skill\n' > "$TMP/skills/source/nested/SKILL.md"
+ln -s nested "$TMP/skills/source/internal"
+sync_tree "$TMP/skills/source" "$TMP/skills/dest"
+check "in-tree relative symlink remains portable" yes "$( [ -f "$TMP/skills/dest/internal/SKILL.md" ] && [ ! -L "$TMP/skills/dest/internal" ] && echo yes || echo no)"
+rm "$TMP/skills/source/internal"
 
 printf 'password=ordinary\n_authToken=secret\n' > "$TMP/skills/source/unsafe.md"
 printf 'keep\n' > "$TMP/skills/dest/sentinel"
@@ -108,6 +120,7 @@ fi
 check "skill token refuses whole tree before copy" yes "$unsafe_refused"
 check "skill destination remains untouched" keep "$(cat "$TMP/skills/dest/sentinel")"
 check "secret file not copied" no "$( [ -f "$TMP/skills/dest/unsafe.md" ] && echo yes || echo no)"
+rm "$TMP/skills/source/unsafe.md"
 
 mkdir -p "$TMP/skills/external"
 printf 'external\n' > "$TMP/skills/external/file"
@@ -118,6 +131,18 @@ else
   link_refused=yes
 fi
 check "skill symlink refuses tree" yes "$link_refused"
+
+rm "$TMP/skills/source/linked"
+mkdir -p "$TMP/skills/source/.system"
+printf '_authToken=cli-owned-secret\n' > "$TMP/skills/source/.system/owned"
+ln -s "$TMP/skills/external" "$TMP/skills/source/.system/linked"
+if sync_tree "$TMP/skills/source" "$TMP/skills/dest" --exclude=.system/ 2>/dev/null; then
+  excluded_ok=yes
+else
+  excluded_ok=no
+fi
+check "excluded CLI-owned tree does not block sync" yes "$excluded_ok"
+check "excluded CLI-owned tree stays excluded" no "$( [ -e "$TMP/skills/dest/.system/owned" ] && echo yes || echo no)"
 
 # strip_pattern still applies, and applies before the rewrite.
 printf 'keep=1\ntelemetry.seed=abc123\nkeep=2\n' > "$HOME/.nuxtrc"

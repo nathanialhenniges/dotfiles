@@ -94,6 +94,10 @@ strip_local() { # basename; keeps the marker, drops machine-local lines after it
   esac
 }
 
+marker_missing() { # repo_file home_file; fail closed before first marked install
+  grep -qF "$LOCAL_MARKER" "$1" && ! grep -qF "$LOCAL_MARKER" "$2"
+}
+
 resolve_link() { # physical path of a symlink target, including relative links
   local link=$1 target parent depth=0
   while [ -L "$link" ]; do
@@ -110,25 +114,34 @@ resolve_link() { # physical path of a symlink target, including relative links
 }
 
 sync_tree() { # source destination [extra rsync options]
-  local source=$1 destination=$2 file root link resolved
+  local source=$1 destination=$2 file root link resolved skip_system=false
   shift 2
+  local option
+  for option in "$@"; do
+    [ "$option" = "--exclude=.system/" ] && skip_system=true
+  done
   root=$(cd -P "$source" && pwd -P) || return 1
-  while IFS= read -r -d '' link; do
-    resolved=$(resolve_link "$link") || {
-      echo "error: refusing to sync skill tree containing unresolved symlinks" >&2
-      return 1
-    }
-    case "$resolved" in
-      "$root"/*) ;;
-      *) echo "error: refusing to sync skill tree containing external symlinks" >&2; return 1 ;;
-    esac
-  done < <(find "$source" -type l -print0)
   while IFS= read -r -d '' file; do
-    if grep -Eq '(_authToken=|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)' "$file" 2>/dev/null; then
+    if [ -L "$file" ]; then
+      resolved=$(resolve_link "$file") || {
+        echo "error: refusing to sync skill tree containing unresolved symlinks" >&2
+        return 1
+      }
+      case "$resolved" in
+        "$root"/*) ;;
+        *) echo "error: refusing to sync skill tree containing external symlinks" >&2; return 1 ;;
+      esac
+    elif grep -Eq '(_authToken=|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)' "$file" 2>/dev/null; then
       echo "error: refusing to sync skill tree containing secret patterns" >&2
       return 1
     fi
-  done < <(find "$source" -type f -print0)
+  done < <(
+    if [ "$skip_system" = true ]; then
+      find "$source" -name .system -type d -prune -o \( -type f -o -type l \) -print0
+    else
+      find "$source" \( -type f -o -type l \) -print0
+    fi
+  )
   mkdir -p "$destination"
   rsync -aL --exclude=.DS_Store --exclude=__pycache__/ --exclude='*.pyc' \
     "$@" "$source/" "$destination/"
@@ -165,6 +178,11 @@ while IFS=: read -r repo_path home_path; do
   [ -n "$repo_path" ] || continue
   if [ ! -f "$HOME/$home_path" ]; then
     echo "  skipped  $home_path (not on this machine)"
+    missing=$((missing + 1))
+    continue
+  fi
+  if marker_missing "$DOTFILES_DIR/$repo_path" "$HOME/$home_path"; then
+    echo "  skipped  $home_path (install the marked config before syncing local paths)"
     missing=$((missing + 1))
     continue
   fi
