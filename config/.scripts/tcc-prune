@@ -1,0 +1,434 @@
+#!/bin/bash
+set -euo pipefail
+
+# tcc-prune — reset macOS TCC (privacy) permissions for apps that are no
+# longer installed, leaving grants for installed apps untouched.
+#
+# Why: macOS caches TCC grants by bundle ID, so a reinstalled app silently
+# regains every permission it ever had. This prunes the stale entries.
+#
+# Dry-run by default; --apply to act. Reading the TCC databases requires
+# Full Disk Access for your terminal.
+#
+# What it does:
+#   - bundle-ID entries (client_type=0) for uninstalled apps:
+#       `tccutil reset All <id>` (Apple-supported, clears user + system DB)
+#   - path entries (client_type=1) whose binary is gone:
+#       direct DELETE from the USER TCC.db only (unsupported write; a
+#       WAL-consistent backup is taken first). System-DB path entries are
+#       report-only — SIP blocks writes and tccutil can't target paths.
+#   - com.apple.* clients are never touched.
+#
+# Safety posture: an app is "uninstalled" only when BOTH Spotlight (mdfind)
+# and LaunchServices (lsregister) fail to find it, and both detectors pass a
+# health check first. Any ambiguity keeps the entry. The failure mode is
+# "prune nothing", never "prune everything".
+
+USER_DB="${TCC_PRUNE_USER_DB:-$HOME/Library/Application Support/com.apple.TCC/TCC.db}"
+SYSTEM_DB="${TCC_PRUNE_SYSTEM_DB:-/Library/Application Support/com.apple.TCC/TCC.db}"
+LSREGISTER="${TCC_PRUNE_LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}"
+BACKUP_DIR="${TCC_PRUNE_BACKUP_DIR:-$HOME/.tcc-prune-backups}"
+
+# --apply only acts on a candidate set that a prior dry run wrote here and
+# that the user therefore had a chance to review. Consumed after each apply.
+PLAN_FILE="$BACKUP_DIR/last-plan.txt"
+
+# Unit separator — TCC client paths can legally contain '|' or ','.
+SEP=$'\x1f'
+
+# Bundle IDs that must resolve if the detector is healthy. If none of these
+# resolve, the detector is broken (dead Spotlight index, lsregister format
+# drift) and every bundle entry would look "uninstalled" — so we keep all.
+SENTINELS=(com.apple.Safari com.apple.TextEdit com.apple.systempreferences)
+
+# ── Helpers (top-level so tests can awk-extract them) ─────────────────────
+
+sql_escape() {
+  printf '%s' "${1//\'/\'\'}"
+}
+
+valid_bundle_id() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
+}
+
+mdfind_hit() {
+  [[ -n "$(mdfind "kMDItemCFBundleIdentifier == '$1'c" 2>/dev/null)" ]]
+}
+
+ls_hit() {
+  grep -Fqix -- "$1" "$LS_IDS"
+}
+
+build_ls_index() {
+  # lsregister -dump is undocumented and its format drifts across releases.
+  # If the sed stops matching, the list comes out empty, the health check
+  # below fails, and bundle pruning degrades to report-only — never a wipe.
+  "$LSREGISTER" -dump 2>/dev/null \
+    | sed -n -E 's/^[[:space:]]*(bundle[[:space:]]+)?(id|identifier):[[:space:]]*([^[:space:]]+).*/\3/p' \
+    | sort -fu > "$LS_IDS" || true
+}
+
+detectors_healthy() {
+  SPOTLIGHT_OK=0
+  LSREG_OK=0
+  local id count=0
+  for id in "${SENTINELS[@]}"; do
+    if mdfind_hit "$id"; then SPOTLIGHT_OK=1; break; fi
+  done
+  [[ -s "$LS_IDS" ]] && count=$(wc -l < "$LS_IDS" | tr -d ' ')
+  if [[ "$count" -ge 25 ]]; then
+    for id in "${SENTINELS[@]}"; do
+      if ls_hit "$id"; then LSREG_OK=1; break; fi
+    done
+  fi
+}
+
+classify_bundle() {
+  # installed | stale | unknown. "stale" requires BOTH detectors healthy and
+  # BOTH missing the id. Anything ambiguous is kept.
+  local id="$1"
+  if ! valid_bundle_id "$id"; then echo unknown; return 0; fi
+  if [[ "$SPOTLIGHT_OK" -ne 1 || "$LSREG_OK" -ne 1 ]]; then echo unknown; return 0; fi
+  if mdfind_hit "$id"; then echo installed; return 0; fi
+  if ls_hit "$id"; then echo installed; return 0; fi
+  echo stale
+}
+
+path_status() {
+  # installed | stale | unverifiable | system-path. `[ -e ]` is also false
+  # when an ancestor dir is unreadable (EACCES), so "missing" is only trusted
+  # when the nearest existing ancestor is readable+searchable.
+  local p="$1" dir
+  case "$p" in
+    /System/*|/bin/*|/sbin/*|/Library/Apple/*) echo system-path; return 0 ;;
+    /usr/local/*) : ;;
+    /usr/*) echo system-path; return 0 ;;
+  esac
+  if [[ -e "$p" ]]; then echo installed; return 0; fi
+  dir="$(dirname "$p")"
+  while [[ ! -e "$dir" && "$dir" != "/" ]]; do
+    dir="$(dirname "$dir")"
+  done
+  if [[ -r "$dir" && -x "$dir" ]]; then echo stale; else echo unverifiable; fi
+}
+
+# ── Guards ────────────────────────────────────────────────────────────────
+
+usage() {
+  echo "Usage: tcc-prune [--apply]"
+  echo ""
+  echo "Reset macOS privacy (TCC) permissions for apps that are no longer"
+  echo "installed. Without --apply, prints a report and changes nothing."
+  echo ""
+  echo "--apply requires a prior dry run: it only acts on the exact candidate"
+  echo "set the last report showed, and refuses if anything changed since."
+  echo ""
+  echo "Requires Full Disk Access for your terminal to read the TCC databases."
+}
+
+APPLY=0
+# macOS ships bash 3.2, where "$@" under `set -u` is unreliable — guard on $#.
+if [[ $# -gt 0 ]]; then
+  for arg in "$@"; do
+    case "$arg" in
+      --apply) APPLY=1 ;;
+      -h|--help) usage; exit 0 ;;
+      *) echo "❌ Unknown argument: $arg" >&2; usage >&2; exit 1 ;;
+    esac
+  done
+fi
+
+if [[ "$(uname)" != "Darwin" ]]; then
+  echo "❌ tcc-prune only makes sense on macOS." >&2
+  exit 1
+fi
+
+if ! sqlite3 -readonly "$USER_DB" 'SELECT count(*) FROM access;' >/dev/null 2>&1; then
+  echo "❌ Cannot read $USER_DB" >&2
+  echo "   Your terminal needs Full Disk Access:" >&2
+  echo "   System Settings → Privacy & Security → Full Disk Access → add your" >&2
+  echo "   terminal app, then restart the terminal and re-run tcc-prune." >&2
+  exit 1
+fi
+
+TMPD=$(mktemp -d "${TMPDIR:-/tmp}/tcc-prune.XXXXXX")
+trap 'rm -rf "$TMPD"' EXIT
+LS_IDS="$TMPD/ls-ids.txt"
+
+# ── Enumerate ─────────────────────────────────────────────────────────────
+
+BUNDLE_IDS=()
+BUNDLE_SERVICES=()
+PATH_CLIENTS=()
+PATH_ORIGINS=()
+PATH_SERVICES=()
+WEIRD_LINES=()
+SKIPPED_APPLE=0
+
+load_db() { # db origin
+  local db="$1" origin="$2" client ctype services i found
+  while IFS="$SEP" read -r client ctype services; do
+    [[ -z "$client" ]] && continue
+    case "$client" in
+      com.apple.*) SKIPPED_APPLE=$((SKIPPED_APPLE+1)); continue ;;
+    esac
+    if [[ "$ctype" == "0" ]]; then
+      # Dedupe bundle ids across DBs: one tccutil reset clears both.
+      found=""
+      i=0
+      while [[ $i -lt ${#BUNDLE_IDS[@]} ]]; do
+        if [[ "${BUNDLE_IDS[$i]}" == "$client" ]]; then found=$i; break; fi
+        i=$((i+1))
+      done
+      if [[ -n "$found" ]]; then
+        BUNDLE_SERVICES[found]="${BUNDLE_SERVICES[found]},$services"
+      else
+        BUNDLE_IDS+=("$client")
+        BUNDLE_SERVICES+=("$services")
+      fi
+    elif [[ "$ctype" == "1" ]]; then
+      PATH_CLIENTS+=("$client")
+      PATH_ORIGINS+=("$origin")
+      PATH_SERVICES+=("$services")
+    else
+      WEIRD_LINES+=("$client — unsupported client_type $ctype ($origin DB)")
+    fi
+  done < <(sqlite3 -readonly -separator "$SEP" "$db" \
+    "SELECT client, client_type, GROUP_CONCAT(service, ',') FROM access GROUP BY client, client_type;")
+}
+
+echo "▶ tcc-prune — scanning TCC databases"
+load_db "$USER_DB" user
+
+if sqlite3 -readonly "$SYSTEM_DB" 'SELECT count(*) FROM access;' >/dev/null 2>&1; then
+  load_db "$SYSTEM_DB" system
+else
+  echo "⏭ System DB unreadable ($SYSTEM_DB) — continuing with user DB only."
+fi
+
+# ── Classify ──────────────────────────────────────────────────────────────
+
+build_ls_index
+detectors_healthy
+
+if [[ "$SPOTLIGHT_OK" -ne 1 ]]; then
+  echo "⏭ Spotlight index unavailable — bundle-ID entries will be kept, not reset."
+fi
+if [[ "$LSREG_OK" -ne 1 ]]; then
+  echo "⏭ lsregister index unavailable — bundle-ID entries will be kept, not reset."
+fi
+echo ""
+
+KEPT=0
+RESET_IDS=()
+RESET_SERVICES=()
+DELETE_PATHS=()
+DELETE_SERVICES=()
+REPORT_LINES=()
+
+pretty_services() {
+  printf '%s' "${1//kTCCService/}"
+}
+
+i=0
+while [[ $i -lt ${#BUNDLE_IDS[@]} ]]; do
+  id="${BUNDLE_IDS[$i]}"
+  status=$(classify_bundle "$id")
+  case "$status" in
+    installed)
+      echo "✅ keep $id"
+      KEPT=$((KEPT+1))
+      ;;
+    stale)
+      RESET_IDS+=("$id")
+      RESET_SERVICES+=("${BUNDLE_SERVICES[$i]}")
+      ;;
+    *)
+      REPORT_LINES+=("$id — could not verify, kept")
+      ;;
+  esac
+  i=$((i+1))
+done
+
+i=0
+while [[ $i -lt ${#PATH_CLIENTS[@]} ]]; do
+  p="${PATH_CLIENTS[$i]}"
+  origin="${PATH_ORIGINS[$i]}"
+  status=$(path_status "$p")
+  case "$status" in
+    installed)
+      echo "✅ keep $p"
+      KEPT=$((KEPT+1))
+      ;;
+    system-path)
+      REPORT_LINES+=("$p — OS path, kept")
+      ;;
+    unverifiable)
+      REPORT_LINES+=("$p — unverifiable (unreadable ancestor), kept")
+      ;;
+    stale)
+      if [[ "$origin" == "user" ]]; then
+        DELETE_PATHS+=("$p")
+        DELETE_SERVICES+=("${PATH_SERVICES[$i]}")
+      else
+        REPORT_LINES+=("$p — stale in system DB (SIP-protected, cannot modify)")
+      fi
+      ;;
+  esac
+  i=$((i+1))
+done
+
+i=0
+while [[ $i -lt ${#WEIRD_LINES[@]} ]]; do
+  REPORT_LINES+=("${WEIRD_LINES[$i]}")
+  i=$((i+1))
+done
+
+i=0
+while [[ $i -lt ${#RESET_IDS[@]} ]]; do
+  echo "🗑 reset ${RESET_IDS[$i]} ($(pretty_services "${RESET_SERVICES[$i]}"))"
+  i=$((i+1))
+done
+i=0
+while [[ $i -lt ${#DELETE_PATHS[@]} ]]; do
+  echo "🗑 delete ${DELETE_PATHS[$i]} ($(pretty_services "${DELETE_SERVICES[$i]}"))"
+  i=$((i+1))
+done
+i=0
+while [[ $i -lt ${#REPORT_LINES[@]} ]]; do
+  echo "⏭ skip ${REPORT_LINES[$i]}"
+  i=$((i+1))
+done
+
+TOTAL=$(( ${#BUNDLE_IDS[@]} + ${#PATH_CLIENTS[@]} ))
+STALE=$(( ${#RESET_IDS[@]} + ${#DELETE_PATHS[@]} ))
+
+echo ""
+echo "Summary: $KEPT kept, ${#RESET_IDS[@]} bundle IDs to reset, ${#DELETE_PATHS[@]} path rows to delete, ${#REPORT_LINES[@]} skipped ($SKIPPED_APPLE Apple entries not shown)"
+
+# Circuit breaker: if more than half of everything looks stale, the far more
+# likely explanation is a broken detector, not a mass uninstall.
+BREAKER=0
+if [[ $TOTAL -gt 0 && $((STALE * 2)) -gt $TOTAL ]]; then
+  BREAKER=1
+  echo "⏭ Over half of all non-Apple entries look stale — that usually means a"
+  echo "  detector problem, not a mass uninstall. --apply will refuse to run;"
+  echo "  set TCC_PRUNE_FORCE=1 to override after verifying the report."
+fi
+
+plan_current() {
+  local i
+  echo "db $USER_DB"
+  i=0
+  while [[ $i -lt ${#RESET_IDS[@]} ]]; do echo "reset ${RESET_IDS[$i]}"; i=$((i+1)); done
+  i=0
+  while [[ $i -lt ${#DELETE_PATHS[@]} ]]; do echo "delete ${DELETE_PATHS[$i]}"; i=$((i+1)); done
+}
+
+if [[ $APPLY -ne 1 ]]; then
+  if [[ $STALE -gt 0 ]]; then
+    mkdir -p "$BACKUP_DIR"
+    plan_current > "$PLAN_FILE"
+    echo "▶ Dry run — nothing changed. Plan saved; --apply will act on exactly this set."
+  else
+    echo "▶ Dry run — nothing changed."
+  fi
+  exit 0
+fi
+
+# ── Apply ─────────────────────────────────────────────────────────────────
+
+if [[ $STALE -eq 0 ]]; then
+  echo "✅ Nothing to prune."
+  exit 0
+fi
+
+if [[ $BREAKER -eq 1 && "${TCC_PRUNE_FORCE:-0}" != "1" ]]; then
+  echo "❌ Refusing to apply: circuit breaker tripped (see above)." >&2
+  exit 1
+fi
+
+if [[ ! -f "$PLAN_FILE" ]]; then
+  echo "❌ No prior dry run found. Run tcc-prune (no flags), review the report," >&2
+  echo "   then re-run with --apply." >&2
+  exit 1
+fi
+if ! plan_current | cmp -s - "$PLAN_FILE"; then
+  echo "❌ Candidates changed since the last dry run. Re-run tcc-prune, review" >&2
+  echo "   the new report, then re-run with --apply." >&2
+  exit 1
+fi
+
+read -r -p "Reset ${#RESET_IDS[@]} bundle IDs and delete ${#DELETE_PATHS[@]} stale path rows? (y/N) " CONFIRM || CONFIRM=""
+if [[ ! "${CONFIRM:-}" =~ ^[Yy]$ ]]; then
+  echo "⏭ Aborted — nothing changed."
+  exit 0
+fi
+
+FAILED=0
+if [[ ${#DELETE_PATHS[@]} -gt 0 ]]; then
+  mkdir -p "$BACKUP_DIR"
+  BACKUP_FILE="$BACKUP_DIR/TCC.db.$(date +%Y%m%d-%H%M%S)"
+  # sqlite .backup is WAL-consistent; a plain cp would miss -wal contents.
+  if ! sqlite3 -readonly "$USER_DB" ".backup '$BACKUP_FILE'"; then
+    echo "❌ Backup failed — refusing to change TCC permissions." >&2
+    exit 1
+  fi
+  echo "▶ Backup written: $BACKUP_FILE"
+fi
+
+i=0
+while [[ $i -lt ${#RESET_IDS[@]} ]]; do
+  id="${RESET_IDS[$i]}"
+  i=$((i+1))
+  # Paranoia re-check: `tccutil reset All` with an EMPTY id resets every app
+  # on the machine. Never let a malformed id reach the call.
+  if [[ -z "$id" ]] || ! valid_bundle_id "$id"; then
+    echo "⏭ skipped invalid id: $id" >&2
+    continue
+  fi
+  if tccutil reset All "$id" >/dev/null 2>&1; then
+    echo "✅ reset $id"
+  else
+    # Partial failures are known tccutil behavior (some services refuse);
+    # treat as a warning, not a run-killer.
+    echo "❌ tccutil could not fully reset $id (some services may remain)" >&2
+    FAILED=$((FAILED+1))
+  fi
+done
+
+if [[ ${#DELETE_PATHS[@]} -gt 0 ]]; then
+  SQL="BEGIN;"
+  i=0
+  while [[ $i -lt ${#DELETE_PATHS[@]} ]]; do
+    # WHERE repeats every predicate on purpose — redundant guards on an
+    # unsupported write path are cheap.
+    SQL="$SQL DELETE FROM access WHERE client = '$(sql_escape "${DELETE_PATHS[$i]}")' AND client_type = 1 AND client NOT LIKE 'com.apple.%';"
+    i=$((i+1))
+  done
+  SQL="$SQL COMMIT;"
+  if ! sqlite3 -cmd '.timeout 3000' "$USER_DB" "$SQL"; then
+    echo "❌ Delete failed — user DB unchanged or partially changed." >&2
+    echo "   Restore: copy $BACKUP_FILE over $USER_DB, then re-run this script's tccd restart." >&2
+    exit 1
+  fi
+  echo "🗑 Deleted ${#DELETE_PATHS[@]} stale path rows from the user DB"
+
+  # tccd caches DB state in memory; restart the per-user instance so it
+  # re-reads. Unprivileged killall only reaches the user's tccd (the one
+  # that owns the user DB) — the root daemon is untouched.
+  launchctl kickstart -k "gui/$(id -u)/com.apple.tccd" 2>/dev/null \
+    || killall tccd 2>/dev/null || true
+  echo "▶ Restarted user tccd"
+  echo "  To restore: cp '$BACKUP_FILE' '$USER_DB' && killall tccd"
+fi
+
+# Consume the plan: the next --apply needs a fresh, reviewed dry run.
+rm -f "$PLAN_FILE"
+
+echo ""
+if [[ $FAILED -gt 0 ]]; then
+  echo "✅ Done with $FAILED warning(s) — see above."
+else
+  echo "✅ Done."
+fi

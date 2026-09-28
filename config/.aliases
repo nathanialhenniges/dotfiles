@@ -40,3 +40,6 @@ alias yolo="claude --dangerously-skip-permissions"
 alias yt-video-backup='~/.scripts/yt-video-backup'
 alias new-video='~/.scripts/new-video'
 alias obs-backup='~/.scripts/obs-backup'
+
+# ─── System Maintenance ─────────────────────────────────────────────────────
+alias tcc-prune='~/.scripts/tcc-prune'
