@@ -62,13 +62,22 @@ portable_filter() {
       -e "s|${HOME}\$|\$HOME|g"
 }
 
+filter_pattern() { # extended regular expression; awk succeeds even if every line matches
+  local pattern=$1
+  awk -v p="$pattern" '$0 !~ p'
+}
+
 sync_file() { # source destination [strip_pattern]
   local source=$1 destination=$2 pattern=${3:-}
+  if grep -Eq '(_authToken=|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)' "$source"; then
+    echo "error: refusing to sync secrets from $source" >&2
+    return 1
+  fi
   mkdir -p "$(dirname "$destination")"
   if [ -n "$pattern" ]; then
-    grep -v -E "$pattern" "$source" | portable_filter > "$destination"
+    strip_local "${source##*/}" < "$source" | filter_pattern "$pattern" | portable_filter > "$destination"
   else
-    portable_filter < "$source" > "$destination"
+    strip_local "${source##*/}" < "$source" | portable_filter > "$destination"
   fi
   # Filtering writes a fresh file, so the mode does not come along the way it
   # would with cp. Git tracks the executable bit and install.sh copies it back
@@ -77,9 +86,49 @@ sync_file() { # source destination [strip_pattern]
   return 0
 }
 
+strip_local() { # basename; keeps the marker, drops machine-local lines after it
+  case "$1" in
+    .zshrc|.zprofile|.profile)
+      awk -v m="$LOCAL_MARKER" '{ print } $0 == m { exit }' ;;
+    *) cat ;;
+  esac
+}
+
+resolve_link() { # physical path of a symlink target, including relative links
+  local link=$1 target parent depth=0
+  while [ -L "$link" ]; do
+    depth=$((depth + 1))
+    [ "$depth" -le 40 ] || return 1
+    target=$(readlink "$link") || return 1
+    case "$target" in
+      /*) link=$target ;;
+      *) link="$(dirname "$link")/$target" ;;
+    esac
+  done
+  parent=$(cd -P "$(dirname "$link")" 2>/dev/null && pwd -P) || return 1
+  printf '%s/%s\n' "$parent" "${link##*/}"
+}
+
 sync_tree() { # source destination [extra rsync options]
-  local source=$1 destination=$2
+  local source=$1 destination=$2 file root link resolved
   shift 2
+  root=$(cd -P "$source" && pwd -P) || return 1
+  while IFS= read -r -d '' link; do
+    resolved=$(resolve_link "$link") || {
+      echo "error: refusing to sync skill tree containing unresolved symlinks" >&2
+      return 1
+    }
+    case "$resolved" in
+      "$root"/*) ;;
+      *) echo "error: refusing to sync skill tree containing external symlinks" >&2; return 1 ;;
+    esac
+  done < <(find "$source" -type l -print0)
+  while IFS= read -r -d '' file; do
+    if grep -Eq '(_authToken=|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)' "$file" 2>/dev/null; then
+      echo "error: refusing to sync skill tree containing secret patterns" >&2
+      return 1
+    fi
+  done < <(find "$source" -type f -print0)
   mkdir -p "$destination"
   rsync -aL --exclude=.DS_Store --exclude=__pycache__/ --exclude='*.pyc' \
     "$@" "$source/" "$destination/"
@@ -120,7 +169,9 @@ while IFS=: read -r repo_path home_path; do
     continue
   fi
   strip_pattern="$(strip_pattern_for "${home_path##*/}")"
-  sync_file "$HOME/$home_path" "$DOTFILES_DIR/$repo_path" "$strip_pattern"
+  if ! sync_file "$HOME/$home_path" "$DOTFILES_DIR/$repo_path" "$strip_pattern"; then
+    exit 1
+  fi
   if [ -n "$strip_pattern" ]; then
     echo "  synced   $home_path (filtered)"
   else
@@ -135,12 +186,18 @@ echo "$synced captured, $missing absent"
 # Agent skills are portable across the Mac and Linux dev boxes. Merge instead
 # of deleting so one machine cannot erase a skill installed only on another.
 if [ -d "$HOME/.claude/skills" ]; then
-  sync_tree "$HOME/.claude/skills" "$DOTFILES_DIR/config/agent/claude/skills"
-  echo "  synced   .claude/skills"
+  if sync_tree "$HOME/.claude/skills" "$DOTFILES_DIR/config/agent/claude/skills"; then
+    echo "  synced   .claude/skills"
+  else
+    echo "  skipped  .claude/skills (contains symlinks or secret patterns)"
+  fi
 fi
 if [ -d "$HOME/.codex/skills" ]; then
-  sync_tree "$HOME/.codex/skills" "$DOTFILES_DIR/config/agent/codex/skills" --exclude=.system/
-  echo "  synced   .codex/skills (excluding CLI-owned .system)"
+  if sync_tree "$HOME/.codex/skills" "$DOTFILES_DIR/config/agent/codex/skills" --exclude=.system/; then
+    echo "  synced   .codex/skills (excluding CLI-owned .system)"
+  else
+    echo "  skipped  .codex/skills (contains symlinks or secret patterns)"
+  fi
 fi
 if [ -d "$HOME/.agents/skills" ]; then
   sync_shared_skill_index "$HOME/.agents/skills" \

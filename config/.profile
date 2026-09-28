@@ -14,3 +14,5 @@ case ":$PATH:" in
   *) [ -d "$HOME/.lmstudio/bin" ] && PATH="$PATH:$HOME/.lmstudio/bin" ;;
 esac
 export PATH
+
+# ---8<--- LOCAL ---8<---

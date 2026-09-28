@@ -37,6 +37,9 @@ if [[ "$(uname)" == "Darwin" ]]; then
   eval "$(fnm env --use-on-cd --shell zsh)"
 fi
 
+# ── zoxide (frecency cd) ───────────────────────────────────
+command -v zoxide &>/dev/null && eval "$(zoxide init zsh --cmd cd)"
+
 # ── Go ──────────────────────────────────────────────────────
 export GOPATH="$HOME/go"
 export PATH="$GOPATH/bin:$PATH"
@@ -122,3 +125,7 @@ eval "$(direnv hook zsh)"
   export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
 [[ -d "$HOME/.lmstudio/bin" && ":$PATH:" != *":$HOME/.lmstudio/bin:"* ]] && \
   export PATH="$PATH:$HOME/.lmstudio/bin"
+
+# Machine-local PATHs appended by application installers belong below this
+# marker. sync.sh drops this block before capturing the file.
+# ---8<--- LOCAL ---8<---

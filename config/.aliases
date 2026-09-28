@@ -2,12 +2,32 @@
 alias hotspotFix='sudo sysctl net.inet.ip.ttl=65'
 alias hotspotUnfix='sudo sysctl net.inet.ip.ttl=64'
 
+# ─── Listing (eza) ──────────────────────────────────────────────────────────
+if command -v eza &>/dev/null; then
+  alias ls='eza --icons --group-directories-first'
+  alias ll='eza -lh --icons --group-directories-first --git'
+  alias la='eza -lah --icons --group-directories-first --git'
+  alias lt='eza --tree --level=2 --icons --group-directories-first'
+fi
+
+# ─── Navigation ─────────────────────────────────────────────────────────────
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
 # ─── Utilities ──────────────────────────────────────────────────────────────
 alias rmdsstore='find . -name ".DS_Store" -type f -delete'
 alias markedit='open -a "MarkEdit"'
 
-# ─── Projects ───────────────────────────────────────────────────────────────
-alias protoburn-sync="pnpm --dir ~/Developer/mrdemonwolf/protoburn sync"
+# bat keeps cat readable in terminals and plain in pipes.
+if command -v bat &>/dev/null; then
+  alias cat='bat --paging=never'
+fi
+
+# ─── Dotfiles ───────────────────────────────────────────────────────────────
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  alias dots='(cd "$HOME/Developer/nathanialhenniges/dotfiles" && ./sync.sh)'
+fi
 
 # ─── Media Conversion ───────────────────────────────────────────────────────
 alias movtogif='function _movtogif() { local out="${2:-${1%.*}.gif}"; ffmpeg -hwaccel videotoolbox -i "$1" -vf "fps=15,scale=600:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 "$out"; }; _movtogif'

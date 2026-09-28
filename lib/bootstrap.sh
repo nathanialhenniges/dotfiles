@@ -5,6 +5,24 @@
 log()     { echo "==> $*"; }
 substep() { echo "    $*"; }
 
+LOCAL_MARKER='# ---8<--- LOCAL ---8<---'
+
+read_local_block() {
+  local file=$1
+  [ -f "$file" ] && grep -qF "$LOCAL_MARKER" "$file" || return 0
+  awk -v m="$LOCAL_MARKER" 'found { print } $0 == m { found = 1 }' "$file"
+}
+
+copy_preserving_local() {
+  local source=$1 target=$2 destination=$3
+  if [ -f "$target" ] && grep -qF "$LOCAL_MARKER" "$source" && grep -qF "$LOCAL_MARKER" "$target"; then
+    awk -v m="$LOCAL_MARKER" '{ print } $0 == m { exit }' "$source" > "$destination"
+    read_local_block "$target" >> "$destination"
+  else
+    cp "$source" "$destination"
+  fi
+}
+
 # Sets global OS to the kernel name (Darwin / Linux).
 detect_os() { OS="$(uname -s)"; }
 

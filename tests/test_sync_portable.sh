@@ -8,6 +8,7 @@
 set -u
 
 SYNC="${1:-$HOME/Developer/nathanialhenniges/dotfiles/sync.sh}"
+LIB="$(dirname "$SYNC")/lib/bootstrap.sh"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
@@ -18,7 +19,14 @@ mkdir -p "$HOME"
 
 # Pull in just the two functions so sourcing sync.sh cannot run the real sync.
 eval "$(awk '/^portable_filter\(\) \{/,/^\}/' "$SYNC")"
+eval "$(awk '/^filter_pattern\(\) \{/,/^\}/' "$SYNC")"
 eval "$(awk '/^sync_file\(\) \{/,/^\}/' "$SYNC")"
+eval "$(awk '/^strip_local\(\) \{/,/^\}/' "$SYNC")"
+eval "$(awk '/^LOCAL_MARKER=/' "$LIB")"
+eval "$(awk '/^read_local_block\(\) \{/,/^\}/' "$LIB")"
+eval "$(awk '/^copy_preserving_local\(\) \{/,/^\}/' "$LIB")"
+eval "$(awk '/^resolve_link\(\)/,/^}/' "$SYNC")"
+eval "$(awk '/^sync_tree\(\) \{/,/^\}/' "$SYNC")"
 
 pass=0; fail=0
 
@@ -51,11 +59,74 @@ check "already-portable untouched" yes "$(has '[[ -d "$HOME/.lmstudio/bin" ]]')"
 check "other users left alone"     yes "$(has '/Users/someoneelse/thing')"
 check "line count preserved"       4   "$(wc -l < "$TMP/out/.zshrc" | tr -d ' ')"
 
+cat > "$HOME/.zshrc" <<EOF
+managed=1
+$LOCAL_MARKER
+export PATH="/Users/nathanialhenniges/private/bin:\$PATH"
+EOF
+sync_file "$HOME/.zshrc" "$TMP/out/.zshrc"
+check "local block excluded" 0 "$(grep -c 'private/bin' "$TMP/out/.zshrc" || true)"
+check "local marker retained" 1 "$(grep -cF "$LOCAL_MARKER" "$TMP/out/.zshrc")"
+
+printf 'keep=1\n_authToken=secret\n' > "$HOME/.secret-file"
+printf 'safe=1\n' > "$TMP/out/.secret-file"
+if sync_file "$HOME/.secret-file" "$TMP/out/.secret-file" 2>/dev/null; then
+  secret_refused=no
+else
+  secret_refused=yes
+fi
+check "token file refused without overwrite" yes "$secret_refused"
+check "existing destination preserved" safe=1 "$(cat "$TMP/out/.secret-file")"
+
+printf '%s\n' '-----BEGIN RSA PRIVATE KEY-----' 'secret' '-----END RSA PRIVATE KEY-----' > "$HOME/.private-key"
+if sync_file "$HOME/.private-key" "$TMP/out/.private-key" 2>/dev/null; then
+  key_refused=no
+else
+  key_refused=yes
+fi
+check "private key refused" yes "$key_refused"
+
+printf 'managed=v2\n%s\n' "$LOCAL_MARKER" > "$TMP/managed"
+printf 'managed=v1\n%s\nexport PATH="/Users/nathanialhenniges/local/bin:$PATH"\n' \
+  "$LOCAL_MARKER" > "$TMP/target"
+copy_preserving_local "$TMP/managed" "$TMP/target" "$TMP/applied"
+check "install retains machine-local block" 1 "$(grep -c 'local/bin' "$TMP/applied")"
+check "install replaces managed content" 1 "$(grep -c 'managed=v2' "$TMP/applied")"
+
+mkdir -p "$TMP/skills/source" "$TMP/skills/dest"
+printf 'ordinary skill\n' > "$TMP/skills/source/SKILL.md"
+sync_tree "$TMP/skills/source" "$TMP/skills/dest"
+check "safe skill tree syncs" yes "$( [ -f "$TMP/skills/dest/SKILL.md" ] && echo yes || echo no)"
+
+printf 'password=ordinary\n_authToken=secret\n' > "$TMP/skills/source/unsafe.md"
+printf 'keep\n' > "$TMP/skills/dest/sentinel"
+if sync_tree "$TMP/skills/source" "$TMP/skills/dest" 2>/dev/null; then
+  unsafe_refused=no
+else
+  unsafe_refused=yes
+fi
+check "skill token refuses whole tree before copy" yes "$unsafe_refused"
+check "skill destination remains untouched" keep "$(cat "$TMP/skills/dest/sentinel")"
+check "secret file not copied" no "$( [ -f "$TMP/skills/dest/unsafe.md" ] && echo yes || echo no)"
+
+mkdir -p "$TMP/skills/external"
+printf 'external\n' > "$TMP/skills/external/file"
+ln -s "$TMP/skills/external" "$TMP/skills/source/linked"
+if sync_tree "$TMP/skills/source" "$TMP/skills/dest" 2>/dev/null; then
+  link_refused=no
+else
+  link_refused=yes
+fi
+check "skill symlink refuses tree" yes "$link_refused"
+
 # strip_pattern still applies, and applies before the rewrite.
 printf 'keep=1\ntelemetry.seed=abc123\nkeep=2\n' > "$HOME/.nuxtrc"
 sync_file "$HOME/.nuxtrc" "$TMP/out/.nuxtrc" '^telemetry\.seed='
 check "strip pattern honoured" 0 "$(grep -c telemetry "$TMP/out/.nuxtrc")"
 check "strip keeps other lines" 2 "$(wc -l < "$TMP/out/.nuxtrc" | tr -d ' ')"
+printf 'telemetry.seed=only\n' > "$HOME/.nuxtrc"
+sync_file "$HOME/.nuxtrc" "$TMP/out/.nuxtrc" '^telemetry\.seed='
+check "all-matching file filters cleanly" 0 "$(wc -c < "$TMP/out/.nuxtrc" | tr -d ' ')"
 
 # ~/.scripts/* must stay runnable after the filter rewrites the file.
 mkdir -p "$HOME/.scripts"

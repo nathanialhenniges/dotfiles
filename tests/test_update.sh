@@ -17,9 +17,10 @@ fake_bin="$test_root/bin"
 home_dir="$test_root/home"
 mkdir -p "$fixture/config/.config/ghostty" "$fixture/config/.config/ohmyposh" \
   "$fixture/config/.scripts" "$fixture/profiles/linux-desktop/.config/ghostty" \
-  "$fixture/tests" "$fake_bin" "$home_dir"
+  "$fixture/tests" "$fixture/lib" "$fake_bin" "$home_dir"
 
 cp "$repo_dir/install.sh" "$repo_dir/update.sh" "$repo_dir/linux-desktop.sh" "$fixture/"
+cp "$repo_dir/lib/bootstrap.sh" "$fixture/lib/"
 for file in .zshrc .zprofile .p10k.zsh .profile .aliases .nuxtrc; do
   cp "$repo_dir/config/$file" "$fixture/config/$file"
 done
