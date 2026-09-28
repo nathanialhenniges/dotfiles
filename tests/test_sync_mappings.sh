@@ -58,6 +58,7 @@ check "every repo path exists" "" "$orphans"
 leaked=$({ macos_mappings; linux_mappings; } | grep -E '\.gitconfig|\.npmrc' || true)
 check "no .gitconfig or .npmrc in tables" "" "$leaked"
 
+eval "$(awk '/^resolve_link\(\)/,/^}/' "$REPO/sync.sh")"
 eval "$(awk '/^sync_tree\(\)/,/^}/' "$REPO/sync.sh")"
 eval "$(awk '/^sync_shared_skill_index\(\)/,/^}/' "$REPO/sync.sh")"
 fixture=$(mktemp -d)

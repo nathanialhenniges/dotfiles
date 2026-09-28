@@ -19,3 +19,5 @@ fi
   export PATH="$HOME/.local/bin:$PATH"
 [[ -d "$HOME/.lmstudio/bin" && ":$PATH:" != *":$HOME/.lmstudio/bin:"* ]] && \
   export PATH="$PATH:$HOME/.lmstudio/bin"
+
+# ---8<--- LOCAL ---8<---

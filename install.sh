@@ -4,6 +4,9 @@ DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_DIR="$DOTFILES_DIR/config"
 OS="$(uname -s)"
 
+# shellcheck source=lib/bootstrap.sh
+source "$DOTFILES_DIR/lib/bootstrap.sh"
+
 die() {
   echo "error: $*" >&2
   exit 1
@@ -91,7 +94,7 @@ apply_macos_dotfiles() (
 
     mkdir -p "$(dirname "$target")"
     temporary_file="$(mktemp "${target}.tmp.XXXXXX")"
-    cp "$source" "$temporary_file"
+    copy_preserving_local "$source" "$target" "$temporary_file"
     chmod "$mode" "$temporary_file"
     mv -f "$temporary_file" "$target"
     echo "Applied $target"
@@ -182,7 +185,9 @@ for file in $(find "$CONFIG_DIR" -type f -not -path "$CONFIG_DIR/server/*"); do
     fi
   fi
   mkdir -p "$(dirname "$target")"
-  cp "$file" "$target"
+  temporary_file="$(mktemp "${target}.tmp.XXXXXX")"
+  copy_preserving_local "$file" "$target" "$temporary_file"
+  mv -f "$temporary_file" "$target"
   echo "Installed $target"
 done
 
