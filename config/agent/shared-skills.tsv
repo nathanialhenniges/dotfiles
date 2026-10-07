@@ -42,7 +42,6 @@ featuring-nomination	generators/featuring-nomination
 feedback-form	generators/feedback-form
 find-skills	find-skills
 force-update	generators/force-update
-foundation	foundation
 foundation-models	apple-intelligence/foundation-models
 generators	generators
 geotoolbox	mapkit/geotoolbox
@@ -76,13 +75,11 @@ macos-capabilities	macos/macos-capabilities
 macos-coding-best-practices	macos/coding-best-practices
 macos-development	macos
 macos-tahoe-apis	macos/macos-tahoe-apis
-mapkit	mapkit
 market-research	product/market-research
 marketing-strategy	app-store/marketing-strategy
 memory	swift/memory
 migration-patterns	ios/migration-patterns
 milestone-celebration	generators/milestone-celebration
-mobile-store-marketing	mobile-store-marketing
 monetization	monetization
 navigation-patterns	ios/navigation-patterns
 networking-layer	generators/networking-layer
@@ -91,7 +88,6 @@ offline-queue	generators/offline-queue
 onboarding-generator	generators/onboarding-generator
 pagination	generators/pagination
 paywall-generator	generators/paywall-generator
-performance	performance
 performance-profiling	performance/profiling
 permission-priming	generators/permission-priming
 persistence-setup	generators/persistence-setup
@@ -134,10 +130,8 @@ subscription-offers	generators/subscription-offers
 swift	swift
 swift-concurrency-updates	swift/concurrency
 swift-development	swift
-swiftdata	swiftdata
 swiftdata-architecture	macos/swiftdata-architecture
 swiftdata-inheritance	swiftdata/inheritance
-swiftui	swiftui
 swiftui-debugging	performance/swiftui-debugging
 tdd-bug-fix	testing/tdd-bug-fix
 tdd-feature	testing/tdd-feature
@@ -155,7 +149,6 @@ ui-review-tahoe	macos/ui-review-tahoe
 usage-insights	generators/usage-insights
 ux-spec	product/ux-spec
 variable-rewards	generators/variable-rewards
-visionos	visionos
 visionos-widgets	visionos/widgets
 visual-intelligence	apple-intelligence/visual-intelligence
 watchOS	watchos
