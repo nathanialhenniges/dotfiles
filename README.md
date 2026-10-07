@@ -44,6 +44,19 @@ cd ~/Developer/nathanialhenniges/dotfiles
 
 3. Restart your terminal to apply changes.
 
+### OpenWrt travel router
+
+Install Zsh, Oh My Posh, the MrDemonWolf server theme, and router aliases on an
+OpenWrt router with root SSH access and `apk`. Ash remains the fallback if Zsh
+is unavailable.
+
+```bash
+./travel-router.sh --dry-run
+./travel-router.sh
+```
+
+Pass another SSH target when needed: `./travel-router.sh root@192.0.2.1`.
+
 ## Usage
 
 Preview or apply only the Linux desktop home profile:
@@ -293,6 +306,7 @@ dotfiles/
 ├── mini.sh                    # Minimal bootstrap (fnm, fzf, direnv, gh)
 ├── server.sh                  # Remote server bootstrap script
 ├── server-dev.sh              # Remote Linux dev-server bootstrap
+├── travel-router.sh           # OpenWrt Zsh and Oh My Posh bootstrap
 ├── sharedhosting.sh           # Shared hosting bootstrap (no root)
 ├── .gitignore
 └── README.md

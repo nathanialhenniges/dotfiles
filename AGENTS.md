@@ -8,6 +8,13 @@ Personal dotfiles repo for macOS (Apple Silicon + Intel), Ubuntu Desktop, and Li
 
 ## Key Scripts
 
+- `./travel-router.sh` — OpenWrt router bootstrap over SSH. Defaults to
+  `root@10.69.42.1`; installs Zsh and Oh My Posh with the MrDemonWolf server
+  theme and router aliases. Requires root access and the `apk` package manager.
+  Preserves first backups and registers managed files for sysupgrade. Interactive
+  logins enter Zsh; Ash remains the fallback if Zsh is unavailable. Supports
+  `--dry-run` without network access or writes.
+
 - `./linux-desktop.sh` — Dedicated Ubuntu Desktop home-profile installer.
   Linux-only and explicitly allowlisted; supports `--dry-run`, preserves
   timestamped backups under `${XDG_STATE_HOME:-$HOME/.local/state}/linux-setup/backups/`, and uses no

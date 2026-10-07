@@ -49,8 +49,6 @@ config/.aliases:.aliases
 config/.nuxtrc:.nuxtrc
 config/.config/ohmyposh/mrdemonwolf.omp.json:.config/ohmyposh/mrdemonwolf.omp.json
 config/.config/ghostty/config:Library/Application Support/com.mitchellh.ghostty/config
-config/.scripts/new-video:.scripts/new-video
-config/.scripts/obs-backup:.scripts/obs-backup
 config/.scripts/yt-video-backup:.scripts/yt-video-backup
 EOF
 }

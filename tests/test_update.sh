@@ -26,8 +26,7 @@ for file in .zshrc .zprofile .p10k.zsh .profile .aliases .nuxtrc; do
 done
 cp "$repo_dir/config/.config/ghostty/config" "$fixture/config/.config/ghostty/config"
 cp "$repo_dir/config/.config/ohmyposh/mrdemonwolf.omp.json" "$fixture/config/.config/ohmyposh/"
-cp "$repo_dir/config/.scripts/new-video" "$repo_dir/config/.scripts/obs-backup" \
-  "$repo_dir/config/.scripts/yt-video-backup" "$fixture/config/.scripts/"
+cp "$repo_dir/config/.scripts/yt-video-backup" "$fixture/config/.scripts/"
 cp "$repo_dir/profiles/linux-desktop/.zshrc" "$repo_dir/profiles/linux-desktop/.aliases" \
   "$fixture/profiles/linux-desktop/"
 cp "$repo_dir/profiles/linux-desktop/.config/ghostty/config" \

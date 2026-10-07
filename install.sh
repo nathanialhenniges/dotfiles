@@ -28,8 +28,6 @@ apply_macos_dotfiles() (
     ".nuxtrc:.nuxtrc:644"
     ".config/ohmyposh/mrdemonwolf.omp.json:.config/ohmyposh/mrdemonwolf.omp.json:644"
     ".config/ghostty/config:Library/Application Support/com.mitchellh.ghostty/config:644"
-    ".scripts/new-video:.scripts/new-video:755"
-    ".scripts/obs-backup:.scripts/obs-backup:755"
     ".scripts/yt-video-backup:.scripts/yt-video-backup:755"
   )
 
