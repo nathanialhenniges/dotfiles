@@ -53,6 +53,12 @@ config/.scripts/yt-video-backup:.scripts/yt-video-backup
 EOF
 }
 
+mac_mini_mappings() {
+  cat <<'EOF'
+profiles/mac-mini/.zshrc:.zshrc
+EOF
+}
+
 linux_mappings() {
   cat <<'EOF'
 profiles/linux-desktop/.zshrc:.zshrc
@@ -77,7 +83,13 @@ EOF
 mappings_for_os() {
   local profile="${1:-}"
   case "$(uname -s)" in
-    Darwin) macos_mappings ;;
+    Darwin)
+      case "$profile" in
+        '') macos_mappings ;;
+        mac-mini) mac_mini_mappings ;;
+        *) echo "error: unknown profile: $profile" >&2; return 1 ;;
+      esac
+      ;;
     Linux)
       case "$profile" in
         linux-desktop) linux_mappings ;;

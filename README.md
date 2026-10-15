@@ -100,6 +100,10 @@ For a direct checkout on either macOS or Ubuntu Desktop, use the guarded updater
 # Ubuntu Desktop — the profile must be named
 ./update.sh --profile linux-desktop --dry-run
 ./update.sh --profile linux-desktop
+
+# Mac mini
+./update.sh --profile mac-mini --dry-run
+./update.sh --profile mac-mini
 ```
 
 It requires the exact `nathanialhenniges/dotfiles` origin, the `main` branch,
@@ -121,16 +125,19 @@ Sync your current system dotfiles into the repo:
 
 # Ubuntu Desktop
 ./sync.sh --profile linux-desktop
+
+# Mac mini: capture only its dedicated shell profile
+./sync.sh --profile mac-mini
 ```
 
-Sync captures per OS from the same mapping tables the installers apply from:
-macOS writes `config/`, an Ubuntu desktop writes `profiles/linux-desktop/`.
-Server and devbox configs are applied wholesale by `server-dev.sh` and are
-never captured, so Linux requires `--profile` here too.
+Sync captures only the selected profile's managed files. The standard Mac
+profile writes `config/`, an Ubuntu desktop writes `profiles/linux-desktop/`,
+and the Mac mini writes only `profiles/mac-mini/.zshrc`. Server and devbox
+configs are applied by `server-dev.sh` and are never captured.
 
-Agent skills are the exception: every sync merges `~/.claude/skills/` and the
-custom portion of `~/.codex/skills/`, then refreshes the portable shared-skill
-index. Codex's CLI-owned `.system` directory and generated caches stay out.
+The full Mac and Linux desktop syncs also merge portable agent skills. The
+Mac mini profile skips those trees and the Brewfile, keeping its sync limited to
+the shell config.
 
 Absolute home paths are rewritten to `$HOME` on capture, so a file recorded on
 the Mac still works on the Ubuntu boxes. For public-repo safety, the sync
@@ -204,15 +211,14 @@ cd ~/Developer/nathanialhenniges/dotfiles
 - `./linux-desktop.sh` — Apply the explicit, home-only Ubuntu desktop profile.
   It does not install packages, change the login shell, fetch Git updates, or
   touch server/devbox and agent setup.
-- `./update.sh` — Safely fast-forward and reapply desktop dotfiles on macOS or
-  Ubuntu. Requires the trusted origin, `main`, and a clean worktree; supports
-  `--dry-run` and never commits or pushes. Linux requires
-  `--profile linux-desktop` so a server or devbox cannot be given the
-  desktop profile by accident.
-- `./sync.sh` — Pull the managed dotfiles for the current OS into the repo,
+- `./update.sh` — Safely fast-forward and reapply the standard macOS profile,
+  Ubuntu desktop profile, or Mac mini profile. Requires the trusted origin,
+  `main`, and a clean worktree; supports `--dry-run` and never commits or pushes.
+  Linux requires `--profile linux-desktop`; the mini uses `--profile mac-mini`.
+- `./sync.sh` — Pull the managed dotfiles for the selected profile into the repo,
   rewrite absolute home paths to `$HOME`, skip `.gitconfig` and `.npmrc`, and
-  merge the Brewfile without ever dropping an entry. Linux requires
-  `--profile linux-desktop`.
+  merge the Brewfile on the full macOS profile. Use `--profile linux-desktop`
+  or `--profile mac-mini` for those profiles.
 - `./install.sh` — Install Homebrew (macOS) or apt essentials
   (Linux), Oh My Zsh + plugins, copy dotfiles, and set up
   Node.js via fnm.
@@ -226,9 +232,9 @@ cd ~/Developer/nathanialhenniges/dotfiles
 - `lib/bootstrap.sh` — Shared helper functions sourced by
   `server.sh` and `server-dev.sh` (base packages, Oh My Zsh,
   plugins, Oh My Posh, config copy, shell switch).
-- `./mini.sh` — Minimal bootstrap: Homebrew plus a small package
-  set (fnm, fzf, direnv, gh, Oh My Posh), Oh My Zsh + plugins,
-  and dotfiles excluding the server/sharedhosting/ghostty configs.
+- `./mini.sh [--dry-run]` — Applies only `profiles/mac-mini/.zshrc`.
+  It installs no packages or developer tools and preserves the first
+  `~/.zshrc.backup`.
 - `./sharedhosting.sh` — Bootstrap a shared hosting environment
   (no root required, bash-based) with configs from `config/sharedhosting/`.
 
@@ -303,7 +309,7 @@ dotfiles/
 ├── install.sh                 # Repo -> system install script
 ├── linux-desktop.sh           # Ubuntu Desktop home-only profile installer
 ├── update.sh                  # Guarded macOS/Ubuntu updater
-├── mini.sh                    # Minimal bootstrap (fnm, fzf, direnv, gh)
+├── mini.sh                    # Mac mini shell profile installer
 ├── server.sh                  # Remote server bootstrap script
 ├── server-dev.sh              # Remote Linux dev-server bootstrap
 ├── travel-router.sh           # OpenWrt Zsh and Oh My Posh bootstrap

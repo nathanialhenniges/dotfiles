@@ -1,85 +1,63 @@
-#!/bin/bash
-# mini.sh — Minimal dotfiles bootstrap (zsh + oh-my-posh, no full Brewfile)
-REPO="https://github.com/nathanialhenniges/dotfiles"
-DOTFILES_DIR="$HOME/.dotfiles"
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Clone or update dotfiles repo
-if [[ -d "$DOTFILES_DIR/.git" ]]; then
-  echo "→ Updating dotfiles..."
-  git -C "$DOTFILES_DIR" pull
+# Apply only the Mac mini shell profile; install no packages or developer tools.
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source_file="$repo_dir/profiles/mac-mini/.zshrc"
+dry_run=false
+
+case "${1:-}" in
+  "") ;;
+  --dry-run) dry_run=true ;;
+  -h|--help)
+    echo "Usage: ./mini.sh [--dry-run]"
+    echo "Applies the minimal Mac mini .zshrc without installing packages."
+    exit 0
+    ;;
+  *) echo "error: unknown option: $1" >&2; exit 1 ;;
+esac
+
+[[ "$(uname -s)" == "Darwin" ]] || { echo "error: Mac mini profile supports macOS only" >&2; exit 1; }
+[[ "$(id -u)" -ne 0 ]] || { echo "error: run as your normal user, not root" >&2; exit 1; }
+[[ -f "$source_file" && ! -L "$source_file" ]] || { echo "error: missing or unsafe profile: $source_file" >&2; exit 1; }
+[[ -n "${HOME:-}" && "$HOME" == /* && "$HOME" != "/" && -d "$HOME" ]] || {
+  echo "error: HOME must be an existing absolute directory" >&2
+  exit 1
+}
+
+target="$HOME/.zshrc"
+[[ ! -L "$target" ]] || { echo "error: refusing symbolic-link destination: $target" >&2; exit 1; }
+[[ ! -e "$target" || -f "$target" ]] || { echo "error: destination is not a regular file: $target" >&2; exit 1; }
+[[ ! -L "$target.backup" ]] || { echo "error: refusing symbolic-link backup: $target.backup" >&2; exit 1; }
+[[ ! -e "$target.backup" || -f "$target.backup" ]] || { echo "error: backup is not a regular file: $target.backup" >&2; exit 1; }
+
+if [[ -f "$target" ]] && cmp -s "$source_file" "$target"; then
+  echo "Mac mini profile is already current."
+  exit 0
+fi
+if [[ "$dry_run" == true ]]; then
+  echo "Would apply $target"
+  exit 0
+fi
+
+if [[ -f "$target" && ! -e "$target.backup" ]]; then
+  cp -p "$target" "$target.backup"
+  echo "Backed up $target -> $target.backup"
+elif [[ -f "$target" ]] && ! grep -qF '# ---8<--- LOCAL ---8<---' "$target"; then
+  recovery_backup="$(mktemp "$target.backup.mac-mini.XXXXXX")"
+  cp -p "$target" "$recovery_backup"
+  echo "Saved unmanaged config $target -> $recovery_backup"
+fi
+
+temporary_file="$(mktemp "$target.tmp.XXXXXX")"
+trap 'rm -f "$temporary_file"' EXIT
+if [[ -f "$target" ]] && grep -qF '# ---8<--- LOCAL ---8<---' "$target"; then
+  awk '{ print } $0 == "# ---8<--- LOCAL ---8<---" { exit }' "$source_file" > "$temporary_file"
+  awk -v marker='# ---8<--- LOCAL ---8<---' 'found { print } $0 == marker { found = 1 }' "$target" >> "$temporary_file"
 else
-  echo "→ Cloning dotfiles..."
-  git clone "$REPO" "$DOTFILES_DIR"
+  cp "$source_file" "$temporary_file"
 fi
-
-CONFIG_DIR="$DOTFILES_DIR/config"
-
-# Install Homebrew if missing
-if ! command -v brew &>/dev/null; then
-  echo "→ Installing Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-fi
-
-# Load Homebrew into current session
-if [[ -f /opt/homebrew/bin/brew ]]; then
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-elif [[ -f /usr/local/bin/brew ]]; then
-  eval "$(/usr/local/bin/brew shellenv)"
-fi
-
-# Install only what .zshrc needs
-echo "→ Installing packages..."
-brew install fnm fzf direnv gh jandedobbeleer/oh-my-posh/oh-my-posh
-
-# Install Oh My Zsh if missing
-if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
-  echo "→ Installing Oh My Zsh..."
-  RUNZSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-fi
-
-# Install Oh My Zsh plugins
-echo "→ Installing Oh My Zsh plugins..."
-git clone https://github.com/Aloxaf/fzf-tab ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/fzf-tab 2>/dev/null || true
-git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions 2>/dev/null || true
-git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting 2>/dev/null || true
-
-# Copy dotfiles (with backup of existing files)
-echo "→ Copying dotfiles..."
-for file in $(find "$CONFIG_DIR" -type f \
-  -not -path "$CONFIG_DIR/server/*" \
-  -not -path "$CONFIG_DIR/sharedhosting/*" \
-  -not -path "$CONFIG_DIR/.config/ghostty/*"); do
-  relative="${file#$CONFIG_DIR/}"
-  target="$HOME/$relative"
-
-  if [ -f "$target" ]; then
-    cp "$target" "$target.backup"
-  fi
-  mkdir -p "$(dirname "$target")"
-  cp "$file" "$target"
-done
-
-# Prepend Ghostty TERM fix to .zshrc
-if ! grep -q 'xterm-ghostty' "$HOME/.zshrc"; then
-  echo '→ Adding Ghostty TERM fix...'
-  printf '[[ "$TERM" == "xterm-ghostty" ]] && export TERM="xterm-256color"\n' | \
-    cat - "$HOME/.zshrc" > /tmp/zshrc_tmp && mv /tmp/zshrc_tmp "$HOME/.zshrc"
-fi
-
-# Make scripts executable
-if [ -d "$HOME/scripts" ]; then
-  chmod +x "$HOME/scripts/"*
-fi
-
-# Load updated zprofile so fnm is available
-source "$HOME/.zprofile" 2>/dev/null || true
-
-# Install latest Node.js via fnm
-if command -v fnm &>/dev/null; then
-  echo "→ Installing Node.js via fnm..."
-  fnm install --latest
-  fnm default "$(fnm ls | head -1 | awk '{print $2}')"
-fi
-
-echo ""
-echo "✓ Done! Run: exec zsh"
+chmod 644 "$temporary_file"
+mv -f "$temporary_file" "$target"
+trap - EXIT
+echo "Applied $target; restart the shell to use it."

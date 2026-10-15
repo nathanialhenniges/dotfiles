@@ -2,10 +2,9 @@
 # Sync dotfiles from system into this repo.
 #
 # Capture direction only: system -> repo. The apply direction is install.sh on
-# macOS and linux-desktop.sh on Linux, and update.sh picks between them. Which
-# files get captured comes from the same per-OS mapping table those two use, so
-# running this on the Mac writes config/ and running it on an Ubuntu desktop
-# writes profiles/linux-desktop/ — never each other's.
+# standard macOS, mini.sh on the Mac mini, and linux-desktop.sh on Linux. Which
+# files get captured comes from the selected profile mapping table, so each
+# machine writes only its own managed files.
 DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # shellcheck source=lib/bootstrap.sh
@@ -15,22 +14,32 @@ profile=""
 prune=false
 while [ $# -gt 0 ]; do
   case "$1" in
-    --profile) profile="${2:-}"; shift 2 ;;
+    --profile)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo "error: --profile requires a name" >&2; exit 1; }
+      profile="$2"
+      shift 2
+      ;;
     --prune) prune=true; shift ;;
     -h|--help)
-      echo "Usage: ./sync.sh [--profile linux-desktop] [--prune]"
+      echo "Usage: ./sync.sh [--profile linux-desktop|mac-mini] [--prune]"
       echo
       echo "Captures this machine's managed dotfiles into the repo. macOS needs"
-      echo "no flag. Linux requires --profile, since the server and devbox"
+      echo "no flag. Linux requires --profile; the Mac mini uses --profile mac-mini."
+      echo "The server and devbox"
       echo "configs are applied by server-dev.sh and are never captured."
       echo
-      echo "The Brewfile merge only ever adds. Entries no longer installed here"
-      echo "are reported at the end of every run; --prune removes them."
+      echo "The Brewfile merge only runs for the full macOS profile. It only adds;"
+      echo "--prune removes reported entries."
       exit 0
       ;;
     *) echo "error: unknown option: $1" >&2; exit 1 ;;
   esac
 done
+
+if [ "$profile" = "mac-mini" ] && [ "$prune" = true ]; then
+  echo "error: --prune applies only to the full macOS Brewfile sync" >&2
+  exit 1
+fi
 
 detect_os
 mappings="$(mappings_for_os "$profile")" || exit 1
@@ -203,24 +212,29 @@ echo "$synced captured, $missing absent"
 
 # Agent skills are portable across the Mac and Linux dev boxes. Merge instead
 # of deleting so one machine cannot erase a skill installed only on another.
-if [ -d "$HOME/.claude/skills" ]; then
+if [ "$profile" != "mac-mini" ] && [ -d "$HOME/.claude/skills" ]; then
   if sync_tree "$HOME/.claude/skills" "$DOTFILES_DIR/config/agent/claude/skills"; then
     echo "  synced   .claude/skills"
   else
     echo "  skipped  .claude/skills (contains symlinks or secret patterns)"
   fi
 fi
-if [ -d "$HOME/.codex/skills" ]; then
+if [ "$profile" != "mac-mini" ] && [ -d "$HOME/.codex/skills" ]; then
   if sync_tree "$HOME/.codex/skills" "$DOTFILES_DIR/config/agent/codex/skills" --exclude=.system/; then
     echo "  synced   .codex/skills (excluding CLI-owned .system)"
   else
     echo "  skipped  .codex/skills (contains symlinks or secret patterns)"
   fi
 fi
-if [ -d "$HOME/.agents/skills" ]; then
+if [ "$profile" != "mac-mini" ] && [ -d "$HOME/.agents/skills" ]; then
   sync_shared_skill_index "$HOME/.agents/skills" \
     "$DOTFILES_DIR/config/agent/shared-skills.tsv" "$HOME/.claude/skills"
   echo "  synced   .agents/skills index"
+fi
+
+if [ "$profile" = "mac-mini" ]; then
+  echo "Done! Review changes with: git diff -- profiles/mac-mini/.zshrc"
+  exit 0
 fi
 
 echo "Skipped .gitconfig and .npmrc; neither installer applies them, so they stay hand-managed"

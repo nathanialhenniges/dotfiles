@@ -13,17 +13,21 @@ die() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) dry_run=true; shift ;;
-    --profile) profile="${2:-}"; shift 2 ;;
+    --profile)
+      [[ $# -ge 2 && -n "$2" ]] || die "--profile requires a name"
+      profile="$2"
+      shift 2
+      ;;
     -h|--help)
       cat <<'EOF'
-Usage: ./update.sh [--profile linux-desktop] [--dry-run]
+Usage: ./update.sh [--profile linux-desktop|mac-mini] [--dry-run]
 
 Fast-forward this trusted dotfiles checkout, then apply the current
 platform's desktop profile. This never commits or pushes changes.
 
-macOS needs no flag. Linux requires --profile, because the server and
-devbox configs are applied by server-dev.sh and must not be overwritten
-with the desktop profile.
+Standard macOS needs no flag. Use --profile mac-mini for the Mac mini.
+Linux requires --profile because server and devbox configs are applied by
+server-dev.sh and must not be overwritten with the desktop profile.
 EOF
       exit 0
       ;;
@@ -55,7 +59,13 @@ branch="$(git -C "$repo_dir" branch --show-current)"
 # the two scripts disagreeing about the answer is worse than either answer.
 platform="$(uname -s)"
 case "$platform" in
-  Darwin) apply_command=("$repo_dir/install.sh" --apply-only) ;;
+  Darwin)
+    case "$profile" in
+      '') apply_command=("$repo_dir/install.sh" --apply-only) ;;
+      mac-mini) apply_command=("$repo_dir/mini.sh") ;;
+      *) die "unknown profile: $profile" ;;
+    esac
+    ;;
   Linux)
     case "$profile" in
       linux-desktop) apply_command=("$repo_dir/linux-desktop.sh") ;;

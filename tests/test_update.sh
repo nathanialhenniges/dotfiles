@@ -17,9 +17,10 @@ fake_bin="$test_root/bin"
 home_dir="$test_root/home"
 mkdir -p "$fixture/config/.config/ghostty" "$fixture/config/.config/ohmyposh" \
   "$fixture/config/.scripts" "$fixture/profiles/linux-desktop/.config/ghostty" \
+  "$fixture/profiles/mac-mini" \
   "$fixture/tests" "$fixture/lib" "$fake_bin" "$home_dir"
 
-cp "$repo_dir/install.sh" "$repo_dir/update.sh" "$repo_dir/linux-desktop.sh" "$fixture/"
+cp "$repo_dir/install.sh" "$repo_dir/update.sh" "$repo_dir/linux-desktop.sh" "$repo_dir/mini.sh" "$fixture/"
 cp "$repo_dir/lib/bootstrap.sh" "$fixture/lib/"
 for file in .zshrc .zprofile .p10k.zsh .profile .aliases .nuxtrc; do
   cp "$repo_dir/config/$file" "$fixture/config/$file"
@@ -31,6 +32,7 @@ cp "$repo_dir/profiles/linux-desktop/.zshrc" "$repo_dir/profiles/linux-desktop/.
   "$fixture/profiles/linux-desktop/"
 cp "$repo_dir/profiles/linux-desktop/.config/ghostty/config" \
   "$fixture/profiles/linux-desktop/.config/ghostty/config"
+cp "$repo_dir/profiles/mac-mini/.zshrc" "$fixture/profiles/mac-mini/.zshrc"
 
 cat > "$fake_bin/uname" <<'EOF'
 #!/bin/sh
@@ -40,7 +42,8 @@ cat > "$fake_bin/id" <<'EOF'
 #!/bin/sh
 if [ "${1:-}" = "-u" ]; then printf '501\n'; else exec /usr/bin/id "$@"; fi
 EOF
-chmod +x "$fixture/install.sh" "$fixture/update.sh" "$fixture/linux-desktop.sh" "$fake_bin/uname" "$fake_bin/id"
+chmod +x "$fixture/install.sh" "$fixture/update.sh" "$fixture/linux-desktop.sh" \
+  "$fixture/mini.sh" "$fake_bin/uname" "$fake_bin/id"
 
 git -C "$fixture" init -q -b main
 git -C "$fixture" add .
@@ -67,6 +70,20 @@ cmp -s "$fixture/config/.config/ghostty/config" \
 [[ "$output" == *"No commit or push was made"* ]] || fail "update completion was unclear"
 [[ ! -e "$home_dir/server" && ! -e "$home_dir/agent" && ! -e "$home_dir/sharedhosting" ]] || \
   fail "excluded profile was applied"
+
+mini_home="$test_root/mini-home"
+mkdir -p "$mini_home"
+mini_dry_run="$(env PATH="$fake_bin:$PATH" HOME="$mini_home" "$fixture/update.sh" --profile mac-mini --dry-run)"
+[[ "$mini_dry_run" == *"Would apply $mini_home/.zshrc"* ]] || fail "Mac mini dry run did not use its profile"
+[[ -z "$(find "$mini_home" -mindepth 1 -print -quit)" ]] || fail "Mac mini dry run wrote to HOME"
+mini_output="$(env PATH="$fake_bin:$PATH" HOME="$mini_home" "$fixture/update.sh" --profile mac-mini)"
+grep -q 'robbyrussell' "$mini_home/.zshrc" || fail "Mac mini profile was not applied"
+grep -q 'No commit or push was made' <<< "$mini_output" || fail "Mac mini update completion was unclear"
+grep -Fq 'plugins=(git fzf-tab zsh-autosuggestions zsh-syntax-highlighting)' "$mini_home/.zshrc" || \
+  fail "Mac mini Oh My Zsh setup is incomplete"
+grep -Fq 'if command -v fnm' "$mini_home/.zshrc" || fail "Mac mini fnm guard is missing"
+grep -Eq 'brew install|npm install|curl .*install' "$fixture/mini.sh" && \
+  fail "Mac mini updater installs developer tools"
 
 printf 'local second edit\n' > "$home_dir/.zshrc"
 env PATH="$fake_bin:$PATH" HOME="$home_dir" "$fixture/install.sh" --apply-only >/dev/null

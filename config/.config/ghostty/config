@@ -68,11 +68,6 @@ keybind = cmd+equal=increase_font_size:1
 keybind = cmd+minus=decrease_font_size:1
 keybind = cmd+zero=reset_font_size
 
-# -- Quick Terminal (dropdown from anywhere — uncomment to enable) -----------
-keybind = global:cmd+grave_accent=toggle_quick_terminal
-# quick-terminal-position = top
-# quick-terminal-animation-duration = 0.15
-
 # -- Misc --------------------------------------------------------------------
 copy-on-select = clipboard
 mouse-hide-while-typing = true

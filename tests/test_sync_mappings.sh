@@ -13,6 +13,7 @@ LIB="$REPO/lib/bootstrap.sh"
 
 # Pull in just the table functions so sourcing the lib cannot run anything else.
 eval "$(awk '/^macos_mappings\(\) \{/,/^\}/' "$LIB")"
+eval "$(awk '/^mac_mini_mappings\(\) \{/,/^\}/' "$LIB")"
 eval "$(awk '/^linux_mappings\(\) \{/,/^\}/' "$LIB")"
 
 pass=0; fail=0
@@ -45,6 +46,8 @@ installer_linux=$(
     grep -oE '"[^"]+"' | tr -d '"' | sort
 )
 check "Linux table matches linux-desktop.sh" "$installer_linux" "$(linux_mappings | sort)"
+check "Mac mini table is isolated" "profiles/mac-mini/.zshrc:.zshrc" "$(mac_mini_mappings)"
+check "Mac mini profile exists" yes "$([ -f "$REPO/profiles/mac-mini/.zshrc" ] && echo yes || echo no)"
 
 # Every repo-side path in both tables must actually exist, or sync writes a file
 # the installer will then refuse to apply ("missing or unsafe managed source").
