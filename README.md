@@ -402,9 +402,9 @@ Replicates the Claude Code + Codex setup on the box (implies
 `--ai`). It:
 
 - Installs the Claude Code + Codex CLIs (if not already).
-- Writes a curated `~/.claude/settings.json` (model, permission
-  allowlist, enabled plugins) — without the machine-specific
-  hooks/statusline paths from the desktop config.
+- Writes curated `~/.claude/settings.json` (model, permission
+  allowlist, enabled plugins, and the portable shared status line), while
+  preserving any prior local status command.
 - Copies the Claude and custom Codex skill packs into `~/.claude/skills/` and
   `~/.codex/skills/`, then recreates the shared `~/.agents/skills/` index.
 - Adds the plugin marketplaces and installs the plugins
@@ -419,6 +419,26 @@ Replicates the Claude Code + Codex setup on the box (implies
 
 `--ai` (and therefore `--agent-setup`) also installs
 `bubblewrap`, which Codex needs for its Linux sandbox.
+
+### Shared Claude + Codex status line
+
+Apply the portable status line to the current device without running the full
+bootstrap:
+
+```bash
+./scripts/apply-agent-statusline.py --dry-run
+./scripts/apply-agent-statusline.py
+```
+
+Claude Code gets a two-row, Powerline-inspired status line with model/reasoning,
+project and Git state, context use, available five-hour and seven-day rate
+windows, and spend information when the provider exposes it. An existing custom
+Claude status command is saved locally and its output is retained. Codex uses
+its native colored footer for model, directory, branch, changes, context, and
+five-hour/weekly usage; the native footer does not expose the same custom
+layout or a credit-balance segment. Codex `/status` remains the place to check
+the account credit balance. The apply script preserves existing settings and
+keeps the first adjacent `.backup` files.
 
 ### Global agent instructions (`config/agent/rules/`)
 

@@ -12,6 +12,10 @@ service_tier = "default"
 [features]
 js_repl = false
 
+[tui]
+status_line = ["model-with-reasoning", "current-dir", "git-branch", "branch-changes", "pull-request-number", "context-used", "five-hour-limit", "weekly-limit", "task-progress"]
+status_line_use_colors = true
+
 # Atlassian (Jira + Confluence) remote MCP, bridged to stdio via mcp-remote.
 # First use opens a browser OAuth login — see docs/jira-mcp-setup.md.
 [mcp_servers.atlassian]

@@ -1,4 +1,9 @@
 {
+  "statusLine": {
+    "type": "command",
+    "command": "~/.local/share/dotfiles/agent-statusline.py",
+    "refreshInterval": 60
+  },
   "permissions": {
     "allow": [
       "mcp__pencil",

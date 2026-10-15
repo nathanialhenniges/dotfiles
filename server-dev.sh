@@ -577,11 +577,19 @@ agent_setup() {
   command -v claude &>/dev/null || install_ai_clis
   local agent_dir="$DOTFILES_DIR/config/agent"
 
-  # Curated Claude Code settings (model, permissions, plugins) — no machine-
-  # specific hooks/statusline paths. Written first so plugins load declaratively.
-  log "Installing Claude Code settings + skills..."
   mkdir -p "$HOME/.claude/skills"
-  [[ -f "$HOME/.claude/settings.json" ]] && cp "$HOME/.claude/settings.json" "$HOME/.claude/settings.json.backup"
+  if [[ -f "$HOME/.claude/settings.json" && ! -e "$HOME/.claude/settings.json.backup" ]]; then
+    cp -p "$HOME/.claude/settings.json" "$HOME/.claude/settings.json.backup"
+  fi
+
+  # Preserve any existing Claude status command before applying the curated
+  # settings below. The local apply helper keeps that command in a user-only
+  # sidecar and chains its output after the shared status line.
+  python3 "$DOTFILES_DIR/scripts/apply-agent-statusline.py" --claude-only
+
+  # Curated portable Claude Code settings (model, permissions, plugins, and
+  # shared statusline). Written first so plugins load declaratively.
+  log "Installing Claude Code settings + skills..."
   cp "$agent_dir/claude/settings.json" "$HOME/.claude/settings.json"
   cp -R "$agent_dir/claude/skills/." "$HOME/.claude/skills/"
   substep "settings.json + $(ls -1 "$agent_dir/claude/skills" | wc -l | tr -d ' ') skills installed"
@@ -635,6 +643,9 @@ agent_setup() {
   else
     cp "$agent_dir/codex/config.toml" "$HOME/.codex/config.toml"
   fi
+
+  python3 "$DOTFILES_DIR/scripts/apply-agent-statusline.py"
+  substep "shared Claude status line + Codex usage footer configured"
 
   log "Installing Codex skills..."
   mkdir -p "$HOME/.codex/skills"
