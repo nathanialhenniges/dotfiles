@@ -38,6 +38,5 @@ alias yolo="claude --dangerously-skip-permissions"
 
 # ─── Video / Media Scripts ──────────────────────────────────────────────────
 alias yt-video-backup='~/.scripts/yt-video-backup'
-
-# ─── System Maintenance ─────────────────────────────────────────────────────
-alias tcc-prune='~/.scripts/tcc-prune'
+alias new-video='~/.scripts/new-video'
+alias obs-backup='~/.scripts/obs-backup'

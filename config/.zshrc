@@ -34,7 +34,7 @@ source $ZSH/oh-my-zsh.sh
 
 if [[ "$(uname)" == "Darwin" ]]; then
   # ── fnm (Fast Node Manager) ────────────────────────────────
-  command -v fnm &>/dev/null && eval "$(fnm env --use-on-cd --shell zsh)"
+  eval "$(fnm env --use-on-cd --shell zsh)"
 fi
 
 # ── zoxide (frecency cd) ───────────────────────────────────

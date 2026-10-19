@@ -6,8 +6,10 @@ tap "jundot/omlx", "https://github.com/jundot/omlx", trusted: true
 tap "mobile-dev-inc/tap"
 tap "mrdemonwolf/den"
 tap "oven-sh/bun"
+tap "peripheryapp/periphery", trusted: { casks: ["periphery"] }
 tap "phkiener/personal"
 tap "revylai/tap"
+tap "stablyai/orca"
 tap "steipete/tap"
 tap "supabase/tap"
 tap "twitchdev/twitch"
@@ -19,12 +21,14 @@ brew "awscli"
 brew "bat"
 brew "btop"
 brew "bundletool"
+brew "cloudflared"
 brew "cocoapods"
 brew "colima"
 brew "composer"
 brew "curl"
 brew "direnv"
 brew "docker"
+brew "docker-buildx"
 brew "docker-compose"
 brew "exiftool"
 brew "eza"
@@ -89,6 +93,7 @@ cask "font-caskaydia-cove-nerd-font"
 cask "font-fontawesome"
 cask "font-montserrat"
 cask "font-roboto"
+cask "forel"
 cask "gcloud-cli"
 cask "ghostty"
 cask "godot"
@@ -107,12 +112,15 @@ cask "postman"
 cask "quo"
 cask "raspberry-pi-imager"
 cask "shottr"
+cask "stablyai/orca/orca", trusted: true
+cask "steipete/tap/codexbar", trusted: true
 cask "tablepro"
 cask "telegram"
 cask "transmit"
 cask "upscayl"
 cask "visual-studio-code"
 cask "voiceink"
+cask "yubico-authenticator"
 cask "zulu@17"
 mas "1Password for Safari", id: 1569813296
 mas "ColorSlurp", id: 1287239339
@@ -121,6 +129,7 @@ mas "Final Cut Pro", id: 1631624924
 mas "Magnet", id: 441258766
 mas "Motion", id: 6746637149
 mas "Pixelmator Pro", id: 6746662575
+mas "Prefab", id: 6758208322
 mas "Userscripts", id: 1463298887
 mas "VBAN Receptor", id: 1462414931
 mas "Xcode", id: 497799835
