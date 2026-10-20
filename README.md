@@ -165,6 +165,18 @@ matching entry to the apply table in `install.sh` or
 `linux-desktop.sh`. `tests/test_sync_mappings.sh` fails if the two
 drift apart. Then run `./sync.sh` to pull the file in.
 
+### Manual macOS installs
+
+Apps with no Homebrew cask or Mac App Store listing. Download each one and
+move the app to `/Applications` after `brew bundle` finishes.
+
+| App | Download | Notes |
+| --- | --- | --- |
+| Open Screenshot Generator | [GitHub releases](https://github.com/dotnetdreamer/open-screenshot-generator/releases/latest) | App Store screenshot generator. Universal DMG. |
+| veadotube mini | [itch.io](https://olmewe.itch.io/veadotube-mini) | PNGtuber avatar. Pick the Silicon build, not "macOS Intel". |
+| Webcam Motion Capture | [webcammotioncapture.info](https://webcammotioncapture.info/) | Apple silicon zip. Includes Webcam Motion Receiver. |
+| withoutBG | [withoutbg.com/mac](https://withoutbg.com/mac) ([releases](https://github.com/withoutbg/withoutbg-mac/releases/latest)) | Offline background removal. Apple Silicon, macOS 14+. |
+
 ## Tech Stack
 
 | Layer           | Technology                              |
