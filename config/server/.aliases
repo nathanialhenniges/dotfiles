@@ -5,8 +5,8 @@
 # gives gst/gco/gp and friends — re-defining those here would just be drift.
 # Only what omz does NOT cover belongs in this file.
 #
-# Nothing from the Mac's config/.aliases is copied over: hotspotFix/hotspotUnfix
-# use BSD net.inet.* sysctl MIBs that do not exist on Linux, markedit shells out
+# Nothing from the Mac's config/.aliases is copied over: the hotspot TTL toggle
+# uses BSD net.inet.* sysctl MIBs that do not exist on Linux, markedit shells out
 # to `open -a`, movtogif/towebmp4 use Apple VideoToolbox encoders, and the three
 # ~/.scripts aliases point at scripts that are never copied to a server.
 
