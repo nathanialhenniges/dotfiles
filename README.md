@@ -341,7 +341,29 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/m
 
 This installs zsh, Oh My Zsh + plugins, and copies a minimal
 shell config from `config/server/` — no macOS tooling, no
-Homebrew, no Node.js. Safe to re-run to pull updated configs.
+Homebrew, no Node.js.
+
+For existing servers, update only the shell files:
+
+```bash
+bash ~/dotfiles/update.sh --profile server --dry-run
+bash ~/dotfiles/update.sh --profile server
+```
+
+After the first update, reconnect and use `dotfiles-update` (or
+`dotfiles-update --dry-run`). The updater requires a clean checkout on `main`
+with the expected GitHub origin and fast-forwards it before applying the
+server profile. No packages, services, firewall rules, or login shells change.
+The dry run checks the current checkout without fetching newer files.
+
+Edit shared settings in `config/server/`, review and publish them to GitHub,
+then run the update command on each server account. Keep host-only additions
+in `~/.zshrc.local` and `~/.aliases.local`; these are never copied or uploaded.
+Updates refuse to overwrite locally edited managed files. Review those edits
+and move host-only additions into the local files before trying again.
+Changed files are backed up under `~/.server-dotfiles-backup.XXXXXX/`.
+To roll back, copy the needed files from that backup into the same paths under
+`~`, then reconnect. Updates are manual; there is no unattended pull job.
 
 ## Dev Server Setup
 

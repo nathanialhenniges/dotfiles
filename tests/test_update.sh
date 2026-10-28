@@ -21,6 +21,8 @@ mkdir -p "$fixture/config/.config/ghostty" "$fixture/config/.config/ohmyposh" \
   "$fixture/tests" "$fixture/lib" "$fake_bin" "$home_dir"
 
 cp "$repo_dir/install.sh" "$repo_dir/update.sh" "$repo_dir/linux-desktop.sh" "$repo_dir/mini.sh" "$fixture/"
+cp "$repo_dir/server-apply.sh" "$fixture/"
+cp -R "$repo_dir/config/server" "$fixture/config/"
 cp "$repo_dir/lib/bootstrap.sh" "$fixture/lib/"
 for file in .zshrc .zprofile .p10k.zsh .profile .aliases .nuxtrc; do
   cp "$repo_dir/config/$file" "$fixture/config/$file"
@@ -119,7 +121,7 @@ fi
 [[ -z "$(find "$linux_home" -mindepth 1 -print -quit)" ]] || fail "refused Linux run wrote to HOME"
 
 if bad_profile="$(env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$linux_home" \
-    "$fixture/update.sh" --profile server --dry-run 2>&1)"; then
+    "$fixture/update.sh" --profile invalid --dry-run 2>&1)"; then
   fail "unknown Linux profile was accepted: $bad_profile"
 fi
 
@@ -136,6 +138,32 @@ linux_output="$(env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$linux_home" \
    "$linux_output" != *"Library/Application Support"* ]] || \
   fail "Linux updater did not dispatch only the desktop profile: $linux_output"
 [[ -z "$(find "$linux_home" -mindepth 1 -print -quit)" ]] || fail "Linux dry run wrote to HOME"
+
+server_home="$test_root/server-home"
+mkdir -p "$server_home"
+server_dry="$(env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$server_home" "$fixture/update.sh" --profile server --dry-run)"
+[[ "$server_dry" == *"would apply .zshrc"* ]] || fail "server profile not dispatched"
+[[ -z "$(find "$server_home" -mindepth 1 -print -quit)" ]] || fail "server dry run wrote files"
+env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$server_home" "$fixture/update.sh" --profile server >/dev/null
+cmp "$fixture/config/server/.zshrc" "$server_home/.zshrc" || fail "server shell not applied"
+printf 'host-only setting\n' > "$server_home/.zshrc.local"
+printf '\n# new server alias\n' >> "$fixture/config/server/.aliases"
+git -C "$fixture" add config/server/.aliases
+git -C "$fixture" -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -qm server-update
+env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$server_home" "$fixture/server-apply.sh" >/dev/null
+cmp "$fixture/config/server/.aliases" "$server_home/.aliases" || fail "known historical config not updated"
+[[ -n "$(find "$server_home" -name '.server-dotfiles-backup.*' -print -quit)" ]] || fail "backup missing"
+grep -qxF 'host-only setting' "$server_home/.zshrc.local" || fail "local overrides changed"
+printf 'private local edit\n' >> "$server_home/.aliases"
+if env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$server_home" "$fixture/server-apply.sh" >/dev/null 2>&1; then
+  fail "local edits overwritten"
+fi
+cp "$fixture/config/server/.aliases" "$server_home/.aliases"
+rm "$server_home/.zshrc"
+ln -s "$test_root/outside-zsh" "$server_home/.zshrc"
+if env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$server_home" "$fixture/server-apply.sh" >/dev/null 2>&1; then
+  fail "server symlink accepted"
+fi
 
 printf 'dirty\n' > "$fixture/dirty"
 if env PATH="$fake_bin:$PATH" HOME="$home_dir" "$fixture/update.sh" --dry-run >/dev/null 2>&1; then

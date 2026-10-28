@@ -84,3 +84,6 @@ command -v gh &>/dev/null && eval "$(gh completion -s zsh)"
 
 # ── Secrets (API tokens, etc.) ─────────────────────────────
 [[ -f ~/.secrets ]] && source ~/.secrets
+
+# Host-only overrides stay outside the repository.
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local

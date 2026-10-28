@@ -1,5 +1,5 @@
 # Server-specific aliases
-# Add your aliases here and re-run server.sh to update.
+# Edit shared aliases here; apply with update.sh --profile server.
 #
 # Deliberately short. Oh My Zsh already gives you ll/la/l and the git plugin
 # gives gst/gco/gp and friends — re-defining those here would just be drift.
@@ -25,3 +25,9 @@ fi
 # defined. An alias pointing at a missing command is harmless; it fails only if
 # you run it on a box where --ai never ran.
 alias yolo='claude --dangerously-skip-permissions'
+
+# Update shared server dotfiles without rerunning provisioning.
+alias dotfiles-update='bash "$HOME/dotfiles/update.sh" --profile server'
+
+# Host-only overrides stay outside the repository.
+[[ -f ~/.aliases.local ]] && source ~/.aliases.local

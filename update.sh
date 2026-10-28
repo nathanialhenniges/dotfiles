@@ -20,14 +20,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       cat <<'EOF'
-Usage: ./update.sh [--profile linux-desktop|mac-mini] [--dry-run]
+Usage: ./update.sh [--profile linux-desktop|server|mac-mini] [--dry-run]
 
 Fast-forward this trusted dotfiles checkout, then apply the current
-platform's desktop profile. This never commits or pushes changes.
+platform's selected profile. This never commits or pushes changes.
 
 Standard macOS needs no flag. Use --profile mac-mini for the Mac mini.
-Linux requires --profile because server and devbox configs are applied by
-server-dev.sh and must not be overwritten with the desktop profile.
+Linux requires --profile linux-desktop or --profile server.
+The server profile applies shell files only; it does not rerun provisioning.
 EOF
       exit 0
       ;;
@@ -68,10 +68,10 @@ case "$platform" in
     ;;
   Linux)
     case "$profile" in
+      server) apply_command=("$repo_dir/server-apply.sh") ;;
       linux-desktop) apply_command=("$repo_dir/linux-desktop.sh") ;;
       '')
-        printf 'error: on Linux, name the profile: ./update.sh --profile linux-desktop\n' >&2
-        printf '       (server and devbox configs are applied by server-dev.sh, not this)\n' >&2
+        printf 'error: on Linux, name the profile: ./update.sh --profile linux-desktop or --profile server\n' >&2
         exit 1
         ;;
       *) die "unknown profile: $profile" ;;
