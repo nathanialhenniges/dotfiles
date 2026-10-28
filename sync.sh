@@ -264,6 +264,15 @@ merged="$(mktemp)"
 trap 'rm -f "$dump" "$merged"' EXIT
 
 brew bundle dump --force --file="$dump"
+# `npm link`ed globals are local checkouts, not registry packages. Recording
+# them makes a rebuild install whatever unrelated package owns that name
+# (acs is a local clone; npm's `acs` is Appcelerator).
+if command -v npm >/dev/null 2>&1; then
+  npm_root=$(npm root -g)
+  while IFS= read -r name; do
+    [ -L "$npm_root/$name" ] && sed -i '' "/^npm \"${name//\//\\/}\"/d" "$dump"
+  done < <(sed -nE 's/^npm "([^"]+)".*/\1/p' "$dump")
+fi
 merge_brewfile "$brewfile" "$dump" "$merged"
 added=$(comm -13 <(LC_ALL=C sort "$brewfile") <(LC_ALL=C sort "$merged") | wc -l | tr -d ' ')
 mv -f "$merged" "$brewfile"
