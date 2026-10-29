@@ -1,0 +1,4 @@
+interface:
+  display_name: "Morning"
+  short_description: "Daily briefing with concrete next actions"
+  default_prompt: "Use $morning to help with this task."

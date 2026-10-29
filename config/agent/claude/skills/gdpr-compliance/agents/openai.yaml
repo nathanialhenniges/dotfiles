@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gdpr Compliance"
+  short_description: "Audit data handling and draft privacy docs"
+  default_prompt: "Use $gdpr-compliance to help with this task."

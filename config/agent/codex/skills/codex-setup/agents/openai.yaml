@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Setup"
+  short_description: "Configure plugins and skills for Codex"
+  default_prompt: "Use $codex-setup to help with this task."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "App Store Review Audit"
+  short_description: "Review App Store submission readiness"
+  default_prompt: "Use $app-store-review-audit to help with this task."

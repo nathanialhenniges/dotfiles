@@ -1,0 +1,4 @@
+interface:
+  display_name: "Uiux Review"
+  short_description: "Review interface usability and accessibility"
+  default_prompt: "Use $uiux-review to help with this task."

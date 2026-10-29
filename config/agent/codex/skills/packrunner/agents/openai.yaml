@@ -1,0 +1,4 @@
+interface:
+  display_name: "Packrunner"
+  short_description: "Scope and execute selected Jira issues"
+  default_prompt: "Use $packrunner to help with this task."

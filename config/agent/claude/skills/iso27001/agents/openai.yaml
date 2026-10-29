@@ -1,0 +1,4 @@
+interface:
+  display_name: "Iso27001"
+  short_description: "Assess ISMS controls and supporting evidence"
+  default_prompt: "Use $iso27001 to help with this task."

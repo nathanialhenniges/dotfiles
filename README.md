@@ -177,6 +177,31 @@ move the app to `/Applications` after `brew bundle` finishes.
 | Webcam Motion Capture | [webcammotioncapture.info](https://webcammotioncapture.info/) | Apple silicon zip. Includes Webcam Motion Receiver. |
 | withoutBG | [withoutbg.com/mac](https://withoutbg.com/mac) ([releases](https://github.com/withoutbg/withoutbg-mac/releases/latest)) | Offline background removal. Apple Silicon, macOS 14+. |
 
+### Codex → Claude Code sync (acs)
+
+[acs](https://github.com/B0llerwagen/agent-config-sync) copies Codex skills
+and MCP servers into Claude Code. It is not on npm (npm's `acs` is an
+unrelated package), so it is not in the Brewfile. Build and link it from source:
+
+```bash
+git clone https://github.com/B0llerwagen/agent-config-sync ~/Developer/other/agent-config-sync
+cd ~/Developer/other/agent-config-sync
+npx -y pnpm install && npx -y pnpm build:cli
+cd cli && npm link
+```
+
+Then, from `~`, set Codex as the source and sync:
+
+```bash
+acs init --user           # source: codex, target: claude-code
+acs plan --user           # preview
+acs sync --user           # apply
+```
+
+Set `"use_symlinks_for_skills": false` in `~/.acs.json`, or `acs sync` stops
+to ask about symlinks even with `-y`. After a sync, run `./sync.sh` to back
+the new skills up here.
+
 ## Tech Stack
 
 | Layer           | Technology                              |

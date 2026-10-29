@@ -1,0 +1,4 @@
+interface:
+  display_name: "Import Memory"
+  short_description: "Import durable facts into managed memory"
+  default_prompt: "Use $import-memory to help with this task."

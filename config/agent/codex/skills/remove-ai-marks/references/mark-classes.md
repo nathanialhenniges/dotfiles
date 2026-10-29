@@ -10,10 +10,15 @@ Invisible or near-invisible characters, exotic spaces, bidi controls, tag charac
 | `bidi` | LRE/RLO/LRI/… |
 | `tag_chars` | U+E0001–U+E007F |
 | `variation_selector` | VS1–VS256 |
+| `private_use` | U+E000–F8FF, U+F0000–FFFFD, U+100000–10FFFD |
+| `noncharacter` | U+FDD0–FDEF, U+FFFE/U+FFFF at the end of every plane |
+| `reserved_ignorable` | U+2065, U+FFF0–FFF8, U+E0000, U+E0080–E00FF, U+E01F0–E0FFF (unassigned Default_Ignorable) |
 | `space` | NBSP, em space, ideographic space |
 | `confusable` | Cyrillic/fullwidth Latin (aggressive) |
 
 **Removal:** `clean_text.py` / Layer A — deterministic, verifiable.
+
+Load-bearing invisibles are preserved by default so real text is not corrupted: emoji glue (ZWJ/VS after an emoji base), script joiners (ZWNJ/ZWJ inside complex scripts like Persian or Devanagari), flag tag-char sequences, same-script fillers/selectors (Mongolian free variation selectors after a Mongolian letter, Khmer inherent vowels after a Khmer consonant, Hangul jamo fillers in a partial syllable), orthographic Arabic/Syriac `Cf` marks, and visible-layout format controls next to their own script (Egyptian hieroglyph quadrat controls `U+13430`–`U+1343F`, Duployan shorthand controls `U+1BCA0`–`U+1BCA3`, musical beam/tie/slur/phrase controls `U+1D173`–`U+1D17A`). The same characters between plain ASCII stay carriers and are still stripped. Use `--strip-emoji-glue` for paranoid mode (strips all of them).
 
 Maps to Nature paper “edit-based watermarking.”
 
@@ -45,12 +50,19 @@ Industry framing (C2PA + SynthID two-layer model; see Institute of AI PM guide i
 
 | Format | Support |
 | --- | --- |
-| PNG / JPEG | Full strip (stdlib + optional exiftool) |
+| PNG / JPEG / WebP | Full strip (stdlib + optional exiftool) |
 | SVG | Drop metadata/XMP blocks |
 | PDF | Prefer exiftool; degraded stdlib XMP strip |
 | DOCX / ODT | Scrub zip XML props / customXml |
 | HTML | Meta generator / JSON-LD / data-ai* |
 | Markdown | YAML frontmatter AI keys |
+
+A metadata *value* (frontmatter value, `<meta content="...">`) is only matched
+against the full vendor vocabulary when its name is a naming field
+(`generator`, `created_with`, `tool`, ...). Under any other name the value is
+free prose and only unambiguous markers (C2PA, SynthID, AIGC,
+digitalSourceType) count — "a static site generator" and "Claude Monet" are
+ordinary writing, not provenance.
 
 **Removal:** `clean_file.py` / `clean_image.py` — usually verifiable by re-inspect.
 

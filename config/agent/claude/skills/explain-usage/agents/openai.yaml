@@ -1,0 +1,4 @@
+interface:
+  display_name: "Explain Usage"
+  short_description: "Explain account limits and context usage"
+  default_prompt: "Use $explain-usage to help with this task."

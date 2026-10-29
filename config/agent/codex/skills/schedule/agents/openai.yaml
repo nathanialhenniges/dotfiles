@@ -1,0 +1,4 @@
+interface:
+  display_name: "Schedule"
+  short_description: "Create and update Codex scheduled work"
+  default_prompt: "Use $schedule to help with this task."

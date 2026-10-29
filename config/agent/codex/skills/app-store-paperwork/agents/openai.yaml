@@ -1,0 +1,4 @@
+interface:
+  display_name: "App Store Paperwork"
+  short_description: "Track store paperwork and file gaps to Jira"
+  default_prompt: "Use $app-store-paperwork to check what store paperwork is done for this app."

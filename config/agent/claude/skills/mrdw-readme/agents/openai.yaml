@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mrdw Readme"
+  short_description: "Write READMEs in the MrDemonWolf format"
+  default_prompt: "Use $mrdw-readme to help with this task."

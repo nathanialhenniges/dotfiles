@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mrdw Brand Guidelines"
+  short_description: "Apply existing MrDemonWolf brand assets"
+  default_prompt: "Use $mrdw-brand-guidelines to help with this task."

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Gh Solo Main Protection"
+  short_description: "Configure GitHub default branch protection"
+  default_prompt: "Use $gh-solo-main-protection to help with this task."
+policy:
+  allow_implicit_invocation: false

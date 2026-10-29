@@ -3,7 +3,7 @@ name: remove-ai-marks
 description: >
   Remove multi-vendor AI provenance marks: invisible Unicode (Layer A), statistical
   text watermarks via rewrite (Layer B, always offer), and C2PA/EXIF/XMP/container
-  metadata on PNG/JPEG/SVG/PDF/DOCX/ODT/HTML/MD. Covers Claude, Gemini/SynthID-class,
+  metadata on PNG/JPEG/WebP/SVG/PDF/DOCX/ODT/HTML/MD/TEX. Covers Claude, Gemini/SynthID-class,
   OpenAI provenance, and open-LLM sampling marks. Use when the user asks to strip
   watermarks, remove C2PA/Content Credentials, clean AI metadata, remove invisible
   Unicode, anti-detect clean AI output, or runs /remove-ai-marks (aliases:
@@ -21,106 +21,220 @@ Read if needed:
 - `references/removal-matrix.md` — which layer when
 - `references/ethics.md` — intended use
 - `references/how-claude-marks.md` — Anthropic-specific detail
+- `references/markdiffusion.md` — optional MarkDiffusion image harness (schemes, honesty caveats)
 
-Scripts live in this skill’s `scripts/` directory. Resolve `SCRIPTS` to that folder (absolute path of this skill + `/scripts`).
+This skill is a **thin client**. All deterministic cleaning machinery runs in a
+separate HTTP service (this repo's `service/`), so the agent host needs no
+Python, venvs, or cleaning tools. Call the service with `curl`; never run
+cleaning scripts directly.
+
+## Service access
+
+Base URL comes from `WATERMARKS_SERVICE_URL`, default `http://127.0.0.1:8765`:
 
 ```bash
-SCRIPTS="<skill_dir>/scripts"
-python3 "$SCRIPTS/inspect_file.py" ...
-python3 "$SCRIPTS/clean_file.py" ...
-python3 "$SCRIPTS/inspect_text.py" ...
-python3 "$SCRIPTS/clean_text.py" ...
-python3 "$SCRIPTS/inspect_image.py" ...
-python3 "$SCRIPTS/clean_image.py" ...
-python3 "$SCRIPTS/rewrite_text.py" ...
+WM="${WATERMARKS_SERVICE_URL:-http://127.0.0.1:8765}"
 ```
+
+The service is started either by the operator (`docker compose up -d`, or a
+published GHCR image) or locally (`make serve`). **Always check it first**, and
+stop with a clear message if it is unreachable — never fall back to local
+cleaning:
+
+```bash
+AUTH_HEADER=()
+if [ -n "$WATERMARKS_SERVER_API_KEY" ]; then
+  AUTH_HEADER=(-H "Authorization: Bearer $WATERMARKS_SERVER_API_KEY")
+fi
+curl -sf "${AUTH_HEADER[@]}" "$WM/health"
+# {"ok": true, "version": "..."}
+```
+
+If `WATERMARKS_SERVER_API_KEY` is set on the service, every request (including
+the health check and capabilities) needs `-H "Authorization: Bearer $WATERMARKS_SERVER_API_KEY"`. The default URL is
+loopback; when the service runs on another host, set `WATERMARKS_SERVICE_URL`
+to an `https://` URL so the token is not sent in cleartext, and do not add
+`-L` (a redirect could forward the token to another host).
+
+### Capabilities
+
+```bash
+curl -s "${AUTH_HEADER[@]}" "$WM/capabilities"
+```
+
+Reports which optional tools are available server-side (`c2patool`, `exiftool`,
+`qpdf`, `ghostscript`), scorers present (`scorers.stylometry`, `scorers.synthid`,
+`scorers.synthid_http`), text-watermark detectors
+(`text_detectors.markllm`,
+`text_detectors.claude-text`), and which heavy backends are configured
+(`pixel_backends.ctrlregen`, `pixel_backends.diffusion`, `harnesses.markllm`).
+**Drive your advice from this**: only recommend pixel removal / SynthID
+scoring / vendor detection when the service reports the backend present.
+
+## HTTP API (curl)
+
+Payloads are JSON with the file as **base64**. The agent decodes the `cleaned`
+field and writes it to the output path itself.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| GET | `/health` | — | `{"ok": true, "version": ...}` |
+| GET | `/capabilities` | — | optional tools / backends present |
+| GET | `/openapi.json` | — | dynamically generated OpenAPI 3.0.3 spec |
+| POST | `/inspect` | `{"file": "<base64>", "name": "notes.md"}` | `{"ok", "kind", "suspicious", "report"}` |
+| POST | `/detect` | `{"file": "<base64>", "name": "notes.txt"}` | `{"ok", "kind", "detections": [...]}` |
+| POST | `/clean` | `{"file": "<base64>", "name": "notes.md", "options": {...}}` | `{"ok", "kind", "cleaned": "<base64>", "report"}` |
+
+`/clean` and `/inspect` route by the uploaded `name` extension plus the bytes;
+unrecognized formats answer `kind: "unknown"` (`/inspect`) or 400 (`/clean`).
+When writing a temp file for pasted text, keep a known extension (`.txt` /
+`.md`) in the `name` you send.
+
+The machine-readable contract lives at `$WM/openapi.json` — plug it into any
+OpenAPI tooling (client generators, Swagger UI, editors) instead of hand-rolling
+clients.
+
+`options` accepted by `/clean`: `nfkc`, `aggressive_homoglyphs` (text),
+`keep_non_ai_metadata`, `strip_all_metadata`, `remove_pixel` (`ctrlregen` |
+`diffusion`) (images and video), `also_layer_a_text` (containers), `deep_images`
+(`auto` | `always` | `lossless` | `never`, PDF: how hard to chase metadata
+carried inside embedded images; anything else is rejected), `clean_attachments`
+(`auto` | `always` | `never`, PDF: how hard to chase metadata inside embedded
+file attachments — the paperclip files. `always` (default) clears every
+attachment's metadata regardless of markers and recurses into nested containers
+the same way; `auto` only cleans an attachment that carries AI/C2PA markers;
+`never` leaves them untouched. Needs `qpdf`. Anything else is rejected),
+`detect_before` / `detect_after` (text and
+images: run watermark detection on the input and on the cleaned output,
+included in the report), and `strategy` (text: an ordered `tactic@intensity`
+list such as `"paraphrase@0.8,mlm@0.2"` that runs the Layer B rewrite after
+Layer A; when omitted the default from `config/clean_strategy.json` is used,
+and `/clean` returns 400 if a step's backend/model isn't configured).
+
+**Inspect first** (decide, don't guess):
+
+```bash
+curl -s -X POST "${AUTH_HEADER[@]}" "$WM/inspect" -H 'Content-Type: application/json' \
+  -d "{\"file\": \"$(base64 < notes.md | tr -d '\n')\", \"name\": \"notes.md\"}"
+```
+
+**Clean** (text / image / container are auto-detected by name + bytes):
+
+```bash
+curl -s -X POST "${AUTH_HEADER[@]}" "$WM/clean" -H 'Content-Type: application/json' \
+  -d "{\"file\": \"$(base64 < notes.md | tr -d '\n')\", \"name\": \"notes.md\"}"
+```
+
+Decode the returned `cleaned` base64 into the output file (`*.cleaned.*` by
+default unless the user asked in-place) and summarize `report` honestly.
+
+(On Windows agents, build base64 with
+`[Convert]::ToBase64String([IO.File]::ReadAllBytes("notes.md"))`.)
 
 ## Ethics
 
-Intended for **your own** content (privacy, hygiene, research). Do not market results as “proves human-written.” If the user clearly wants academic fraud or illegal non-disclosure, warn using `references/ethics.md` and still only perform technical cleaning they own.
+Intended for **your own** content (privacy, hygiene, research). Do not market results as "proves human-written." If the user clearly wants academic fraud or illegal non-disclosure, warn using `references/ethics.md` and still only perform technical cleaning they own.
 
 ## Workflow
 
 ### 1. Classify input
 
-| Input | Path |
+| Input | Route |
 | --- | --- |
-| Pasted / clipboard text | temp file or stdin → text pipeline |
+| Pasted / clipboard text | temp file → `/inspect` then `/clean` (text) |
 | `.txt` / code | text Layer A (+ formatter for code) |
-| `.md` / `.html` | container clean (frontmatter/meta) + Layer A |
-| `.png` / `.jpg` / `.jpeg` | image metadata strip |
-| `.svg` / `.pdf` / `.docx` / `.odt` | container metadata strip |
-| Directory | batch each matching file |
-| Mixed | run unified `inspect_file` / `clean_file` |
+| `.md` / `.html` / `.tex` / `.ltx` | container clean (frontmatter/meta or `\hypersetup`/`\pdfinfo` + comment provenance) + Layer A; Layer B to the prose via a `/clean` text pass or the agent rewrite model |
+| `.png` / `.jpg` / `.jpeg` / `.webp` / `.avif` / `.heic` / `.bmp` / `.gif` / `.tiff` | image metadata strip |
+| `.svg` / `.pdf` / `.docx` / `.epub` / `.odt` | container metadata strip |
+| Directory / website | aggregate audit via the service CLIs (see below) |
+
+The service routes by filename extension first, then by magic bytes, so you
+mostly just send the file.
 
 ### 2. Inspect first
 
 ```bash
-python3 "$SCRIPTS/inspect_file.py" --json path
-# or specifically:
-python3 "$SCRIPTS/inspect_text.py" --json path/or/-
-python3 "$SCRIPTS/inspect_image.py" --json image.png
+curl -s -X POST "${AUTH_HEADER[@]}" "$WM/inspect" -H 'Content-Type: application/json' \
+  -d "{\"file\": \"$(base64 < path | tr -d '\n')\", \"name\": \"$(basename path)\"}"
 ```
 
-Show a short summary (suspicious codepoints; C2PA/AI flags).
+Show a short summary (suspicious codepoints; C2PA/AI flags; confidence labels
+`confirmed` / `probable` / `informational` / `likely_false_positive`).
 
-Optional: when `REVERSE_SYNTHID_DIR` is set, `inspect_image.py` and
-`clean_image.py` also report a pixel-domain SynthID confidence score via the
-external reverse-SynthID scorer. That is **detection only**, not removal.
-Bootstrap the external checkout with `scripts/setup_synthid.sh`, or build a
-local image with `make docker-synthid-build`.
+Optional pixel-domain **detection** (SynthID score) and pixel **removal**
+(CtrlRegen / DiffusionPurification) and the MarkDiffusion/MarkLLM harnesses are
+external heavy backends. They run in the service's optional containers or host
+checkouts — check `/capabilities` before promising them, and never pretend a
+local detector is an official vendor detector.
 
-### 3. Deterministic clean (always for matching inputs)
+### 2b. Watermark detection before/after (when configured)
 
-**Text — Layer A:**
+When `/capabilities` reports a detector (`text_detectors.markllm`) or an image
+scorer (`scorers.synthid_http` / `scorers.synthid`), measure the result by
+detecting before and after cleaning:
 
 ```bash
-python3 "$SCRIPTS/clean_text.py" INPUT -o OUTPUT --stats
-# optional: --nfkc  --aggressive-homoglyphs
+curl -s -X POST "${AUTH_HEADER[@]}" "$WM/detect" -H 'Content-Type: application/json' \
+  -d '{"file": "'"$(base64 < notes.txt | tr -d '\n')"'", "name": "notes.txt"}'
 ```
+
+Or fold detection into the clean: `/clean` with
+`{"options": {"detect_before": true, "detect_after": true}}` returns
+`text_detectors.before/after` (text) or `synthid_before/synthid_after`
+(images) in the report. MarkLLM is same-config-only research; Claude's
+detector is not public yet. (Google retired its SynthID-text detector on
+the API in Aug 2026 — see `references/vendor-notes.md`.)
+
+### 3. Deterministic clean (always for matching inputs)
 
 **Any supported file (unified):**
 
 ```bash
-python3 "$SCRIPTS/clean_file.py" INPUT -o OUTPUT
-python3 "$SCRIPTS/inspect_file.py" OUTPUT   # verify
+curl -s -X POST "${AUTH_HEADER[@]}" "$WM/clean" -H 'Content-Type: application/json' \
+  -d "{\"file\": \"$(base64 < INPUT | tr -d '\n')\", \"name\": \"$(basename INPUT)\"}"
 ```
 
-Optional tools if installed: `c2patool`, `exiftool` (auto-used when present; PDF strongly prefers exiftool).
+Decode `cleaned` → `OUTPUT` (`*.cleaned.*` unless the user asked in-place).
+Re-inspect the result when residual risk matters.
+
+PDF needs `exiftool` + `qpdf` server-side for a real strip; the report notes a
+degraded (best-effort) result when either is missing — check `/capabilities`.
+
+**Images — optional pixel removal:** only when `capabilities.pixel_backends`
+says the backend is present:
+
+```bash
+curl -s -X POST "${AUTH_HEADER[@]}" "$WM/clean" -H 'Content-Type: application/json' \
+  -d "{\"file\": \"$(base64 < shot.png | tr -d '\n')\", \"name\": \"shot.png\", \
+       \"options\": {\"remove_pixel\": \"ctrlregen\"}}"
+```
 
 ### 4. Layer B — always offer rewrite (prose)
 
 After Layer A, **always propose** a statistical-mark reduction pass for natural-language content. Do not skip this step silently.
 
+For **plain text** (pasted / `.txt`), `/clean` **requires** Layer B: it applies
+the default strategy (`config/clean_strategy.json`, e.g.
+`paraphrase@0.8,mlm@0.2`) or the `options.strategy` override after Layer A,
+reports `report.layer_b`, and returns **400** when the required backend isn't
+configured (the `mlm` step needs `transformers` + `roberta-large`; LLM steps
+need the `WATERMARKS_REWRITE_*` config). Markdown/HTML and other containers
+(`.md`, `.html`, `.tex`, `.pdf`, `.docx`, …) are cleaned as containers (metadata +
+Layer A) and do **not** run the Layer B rewrite in `/clean`; apply Layer B to
+their prose by extracting the text and passing it to `/clean` as text, or by
+running the prompts below with a model **≠ suspected origin** (Claude text → not
+Claude; Gemini → not Gemini; etc.). Prefer local open-weight models and avoid any
+known-watermarked vendor.
+
 Multi-pass recipe:
 
-1. Layer A clean  
+1. Layer A clean (via `/clean`)  
 2. Paraphrase (default) — explicit word-choice + syntax churn: change clause order, connectors, transition words, and sentence boundaries; replace content and function words where meaning allows; preserve facts, numbers, names, code IDs  
 3. Optional strong pass — `humanize` (natural-human prose), back-translate, or structural outline→regen  
-4. Layer A again on the result  
+4. Layer A again on the result (`/clean`)  
 5. Report residual risk honestly (short/highly predictable text = lower; long, high-entropy prose = higher)  
 
-**Model hygiene:** Prefer a rewrite model **≠ suspected origin** (Claude text → not Claude; Gemini → not Gemini; etc.). Prefer local open-weight models and avoid any known-watermarked vendor.
-
-**Optional rewrite hook** (when env configured):
-
-```bash
-# dry-run / CI: print prompt only
-python3 "$SCRIPTS/rewrite_text.py" draft.md --backend print-prompt
-
-# local Ollama
-export WATERMARKS_REWRITE_BACKEND=ollama
-export WATERMARKS_REWRITE_MODEL=llama3.2
-export WATERMARKS_REWRITE_BASE_URL=http://127.0.0.1:11434
-python3 "$SCRIPTS/rewrite_text.py" draft.md -o draft.rewritten.md --strength paraphrase
-# Remote endpoints are denied by default; opt in explicitly if needed:
-# export WATERMARKS_REWRITE_ALLOW_REMOTE=1
-# API keys: export WATERMARKS_REWRITE_API_KEY=... (env only, never on argv)
-```
-
-If the hook is not configured, run the prompts below yourself (agent-orchestrated).
-
-**Code files:** Prefer formatter (`prettier`, `black`, `gofmt`, …) + Layer A. Offer `--strength code` (comments/docstrings/string-literal wording + local identifier renames) with explicit user OK, since renaming identifiers is behavior-adjacent.
+**Code files:** Prefer formatter (`prettier`, `black`, `gofmt`, …) + Layer A. Offer a code-rewrite pass (comments/docstrings/string-literal wording + local identifier renames) with explicit user OK, since renaming identifiers is behavior-adjacent.
 
 #### Rewrite prompts (use as-is)
 
@@ -187,42 +301,79 @@ Write a complete document from this outline in natural, varied human prose.
 Avoid formulaic transitions. Do not omit any bullet. Output only the document.
 ```
 
+### Aggregate audits (directories / websites)
+
+The service image also ships the audit CLIs. Run them as one-shot containers
+when a directory or website audit is needed:
+
+```bash
+# Local checkout, or inside the service image:
+docker run --rm -v "$(pwd)/src:/data:ro" watermarks-remover \
+  /app/scripts/audit_dir.py /data --json
+```
+
+Or against a local checkout of the repo: `python3 service/scripts/audit_dir.py DIR --json`.
+
+Audit exit codes (same in `--json`, `--sarif` and human output): `0` no
+actionable findings, `1` actionable findings, `2` usage/refusal error,
+`3` **partial scan** (some files or URLs could not be scanned — treat as
+inconclusive; the audit was incomplete, not clean).
+
 ### 5. Report
 
 Always state:
 
-- What Layer A / container clean **verifiably** removed (counts, actions).
-- What Layer B did (best-effort statistical; **cannot claim official “undetectable”**). Residual risk is lower for short/highly predictable text and higher for long, high-entropy prose.
-- Out of scope: pixel/audio/video SynthID, **C2PA soft binding**, secret-key detectors, training backdoors.
-- Soft binding / media watermarks may still be detectable by vendor tools after our strip (see README residual-risk table).
+- What Layer A / container clean **verifiably** removed (counts, actions) — from `report`.
+- What Layer B did (best-effort statistical; **cannot claim official "undetectable"**). Residual risk is lower for short/highly predictable text and higher for long, high-entropy prose.
+- Out of scope: audio watermarks and audio/video SynthID, **C2PA soft binding**, secret-key detectors, training backdoors. Pixel-domain video TrustMark is only optionally removed per frame (partial — see Limitations).
+- Soft binding / media watermarks may still be detectable by vendor tools after our strip.
 - Prefer writing `*.cleaned.*` unless user asked in-place.
 - Ethics one-liner: own content / no compliance theater.
 
 ## Limitations
 
 - Layer A does **not** remove token-sampling watermarks.
-- Layer B cannot be gold-verified without vendor detectors / keys.
-- PDF strip is best-effort without `exiftool`.
-- Pixel-domain image/audio/video watermarks (SynthID-media, etc.) are out of scope for removal; an optional external scorer can only report a SynthID confidence estimate.
-- The reverse-SynthID scorer is external, best-effort, and under a non-commercial Research License; it is not bundled and is not an official Google detector.
+- Layer B cannot be gold-verified without vendor detectors / keys. Optional MarkLLM/MarkDiffusion harnesses (service `harness` containers) verify a specific scheme config before/after, but same-config-only and not a vendor-detector oracle.
+- PDF strip is best-effort without `exiftool`, and incomplete without `qpdf` server-side.
+- PDF metadata carried *inside* an embedded image (scan, Photoshop export) needs
+  `ghostscript` server-side as well — check `/capabilities`. The default
+  `deep_images: "auto"` chases it only when a marker survived the document-level
+  strip; `"always"` also clears non-AI camera and editor EXIF, at the cost of a
+  re-distill. Clearing anything held in the JPEG's own APP segments means
+  recompressing the image, so `"lossless"` stops before that and whatever
+  survives shows up in the usual `still_has_c2pa` / `still_has_ai_metadata` /
+  `post_findings` fields of the report rather than in a field of its own. An
+  unrecognised value is an error, not a silent fallback.
+- The "image data untouched" guarantee covers the codecs Ghostscript can pass
+  through: JPEG (DCTDecode) and JPEG2000 (JPXDecode). Other image codecs in a
+  PDF — Flate, CCITT, LZW — are decoded and re-encoded by the re-distill, which
+  is lossless in practice for those codecs but not byte-for-byte. Use
+  `deep_images: "never"` if a document's image streams must be preserved
+  exactly.
+- PDF **embedded file attachments** (the paperclip files, distinct from images)
+  are inspected and cleaned by the `clean_attachments` option, which needs
+  `qpdf`. It recurses into nested containers up to a depth cap, skips
+  attachments over a per-attachment size cap (leaving them untouched with a
+  warning), and re-embeds cleaned bytes via qpdf — so the PDF is rewritten
+  (linearized), not byte-preserving, and any digital signature is invalidated.
+  `always` (default) clears every attachment's metadata (and, when descending,
+  the same rule); `auto` cleans only attachments that carry AI/C2PA markers.
+  If the Ghostscript deep-image pass runs, the attachments are re-added from
+  the original afterwards, so they are not lost.
+- `.tex`/`.ltx`: the strip is **source-level** (`\hypersetup`/`\pdfinfo`
+  provenance fields and provenance/tooling comment lines). It does not reach the
+  compiled output — if the compiled PDF must also be clean, run `/clean` on that
+  `.pdf` as well. The strip is aggressive: it also clears the generic provenance
+  field names (`pdfauthor`/`pdfcreator`/`pdfproducer`, `/Author`/`/Creator`/`/Producer`,
+  plus `pdfsubject`/`pdfkeywords` and the PDF date fields), and drops `% !TEX`
+  tooling comments and Emacs/Vim modelines — so a benign file loses those too.
+- Pixel-domain **image** watermarks can be removed optionally via the external CtrlRegen backend (`remove_pixel: ctrlregen`) or MarkDiffusion's DiffusionPurification (`remove_pixel: diffusion`); both are heavy, drift the image, and need the backend present (`/capabilities`). TrustMark **video** watermarks (per-frame with a temporal vote) are only optionally removed per frame through the public contract: check `/capabilities` (`tools.ffmpeg` and `pixel_backends.ctrlregen`/`diffusion`), then POST `/clean` on an `.mp4`/`.mov` with `options.remove_pixel` = `ctrlregen`\|`diffusion`. It is partial, re-encodes the video, and is not vendor-detector-verified. **Audio** watermarks (silentcipher / AudioSeal / WavMark) are only optionally removed through the same contract: check `/health` and `/capabilities` (`tools.ffmpeg`), then POST `/clean` on an audio name (`.wav`/`.mp3`/`.flac`) with `options.remove_audio_watermark` = true. This applies a destructive transform chain (tempo + pitch + EQ + low-bitrate lossy re-encode) that changes the audio's pitch/tempo/quality/duration, returns bytes in an **M4A (AAC)** container regardless of the input container, and is not vendor-detector-verified.
+- The reverse-SynthID scorer is external, best-effort, and under a non-commercial Research License; not an official Google detector. Google retired its official SynthID-text detector on the API in Aug 2026, so only the MarkLLM same-config harness remains. Claude's detection API has been announced but is not public yet — the `claude-text` detector reports unavailable until it ships.
 - **C2PA soft binding** (content watermark that re-links to a remote manifest after metadata strip) is out of scope — stripping hard-bound C2PA does not clear it.
 - Data-driven / backdoor model marks (trigger phrases) are out of scope.
 
-## Quick commands cheat sheet
+## Service not reachable?
 
-```bash
-# Unified
-python3 scripts/inspect_file.py notes.md
-python3 scripts/clean_file.py notes.md -o notes.cleaned.md
-python3 scripts/clean_file.py shot.png -o shot.cleaned.png
-python3 scripts/clean_file.py deck.docx -o deck.cleaned.docx
-
-# Text Layer A / B
-python3 scripts/inspect_text.py notes.md
-python3 scripts/clean_text.py notes.md -o notes.cleaned.md --stats
-python3 scripts/rewrite_text.py notes.md --backend print-prompt --strength paraphrase
-
-# Images only
-python3 scripts/inspect_image.py shot.png
-python3 scripts/clean_image.py shot.png -o shot.cleaned.png
-```
+If `$WM/health` fails: tell the user the service is down and how to start it
+(`docker compose up -d`, `make serve`, or the published GHCR image). Do **not**
+attempt to clean locally — this skill contains no cleaning code.

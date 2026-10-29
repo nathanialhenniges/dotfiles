@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Duplicates"
+  short_description: "Find duplication worth consolidating"
+  default_prompt: "Use $audit-duplicates to help with this task."
