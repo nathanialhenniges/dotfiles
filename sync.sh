@@ -130,6 +130,12 @@ sync_tree() { # source destination [extra rsync options]
     [ "$option" = "--exclude=.system/" ] && skip_system=true
   done
   root=$(cd -P "$source" && pwd -P) || return 1
+  # Skill installers (npx skills, acs) keep the real copy in ~/.agents/skills
+  # and link it into ~/.claude/skills and ~/.codex/skills, so links into that
+  # one directory are followed. rsync -L copies their contents, which never
+  # pass through the per-file secret scan below, so scan them here.
+  local shared
+  shared=$(cd -P "${AGENT_SKILLS_DIR:-$HOME/.agents/skills}" 2>/dev/null && pwd -P) || shared=""
   while IFS= read -r -d '' file; do
     if [ -L "$file" ]; then
       resolved=$(resolve_link "$file") || {
@@ -138,6 +144,12 @@ sync_tree() { # source destination [extra rsync options]
       }
       case "$resolved" in
         "$root"/*) ;;
+        "$shared"/*)
+          if [ -n "$shared" ] && grep -rEq '(_authToken=|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)' "$resolved" 2>/dev/null; then
+            echo "error: refusing to sync skill tree containing secret patterns" >&2
+            return 1
+          fi
+          [ -n "$shared" ] || { echo "error: refusing to sync skill tree containing external symlinks" >&2; return 1; } ;;
         *) echo "error: refusing to sync skill tree containing external symlinks" >&2; return 1 ;;
       esac
     elif grep -Eq '(_authToken=|-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)' "$file" 2>/dev/null; then
@@ -164,6 +176,7 @@ sync_shared_skill_index() { # source destination claude_skills
       [ -e "$entry" ] || [ -L "$entry" ] || continue
       name=${entry##*/}
       if [ -L "$entry" ]; then
+        [ -e "$entry" ] || continue # dangling: the skill was removed
         target=$(readlink "$entry")
         case "$target" in
           "$claude_skills"/*) relative=${target#"$claude_skills"/} ;;
@@ -213,7 +226,9 @@ echo "$synced captured, $missing absent"
 # Agent skills are portable across the Mac and Linux dev boxes. Merge instead
 # of deleting so one machine cannot erase a skill installed only on another.
 if [ "$profile" != "mac-mini" ] && [ -d "$HOME/.claude/skills" ]; then
-  if sync_tree "$HOME/.claude/skills" "$DOTFILES_DIR/config/agent/claude/skills"; then
+  # .trash/ and synced/ are acs's own bookkeeping (UUID bucket dirs), not skills.
+  if sync_tree "$HOME/.claude/skills" "$DOTFILES_DIR/config/agent/claude/skills" \
+    --exclude=.trash/ --exclude=synced/; then
     echo "  synced   .claude/skills"
   else
     echo "  skipped  .claude/skills (contains symlinks or secret patterns)"

@@ -133,6 +133,24 @@ fi
 check "skill symlink refuses tree" yes "$link_refused"
 
 rm "$TMP/skills/source/linked"
+mkdir -p "$HOME/.agents/skills/shared-skill"
+printf 'shared\n' > "$HOME/.agents/skills/shared-skill/SKILL.md"
+ln -s "$HOME/.agents/skills/shared-skill" "$TMP/skills/source/shared-skill"
+if sync_tree "$TMP/skills/source" "$TMP/skills/dest" 2>/dev/null; then
+  shared_ok=yes
+else
+  shared_ok=no
+fi
+check "link into ~/.agents/skills is followed" yes "$shared_ok"
+check "shared skill copied as files" shared "$(cat "$TMP/skills/dest/shared-skill/SKILL.md" 2>/dev/null)"
+printf '_authToken=shared-secret\n' > "$HOME/.agents/skills/shared-skill/leak.md"
+if sync_tree "$TMP/skills/source" "$TMP/skills/dest" 2>/dev/null; then
+  shared_secret_refused=no
+else
+  shared_secret_refused=yes
+fi
+check "secret inside shared skill refuses tree" yes "$shared_secret_refused"
+rm "$TMP/skills/source/shared-skill"
 mkdir -p "$TMP/skills/source/.system"
 printf '_authToken=cli-owned-secret\n' > "$TMP/skills/source/.system/owned"
 ln -s "$TMP/skills/external" "$TMP/skills/source/.system/linked"
