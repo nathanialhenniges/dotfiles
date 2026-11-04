@@ -72,6 +72,8 @@ Personal dotfiles repo for macOS (Apple Silicon + Intel), Ubuntu Desktop, and Li
 
 - When adding a new dotfile: add it to the `files` array in `sync.sh`, then run `./sync.sh`. For nested paths under `~/.config/`, add an explicit `cp` command in the nested config section of `sync.sh`.
 - Custom scripts live in `~/.scripts/` (hidden folder) and are tracked in `config/.scripts/`. `install.sh` copies them to `~/.scripts/` and makes them executable. `sync.sh` pulls them back.
+- `~/.scripts/yt-video-backup 2026/<project-folder>` copies one closed Final Cut YouTube project into the mounted Google Drive `My Drive/MultiMedia Projects/Social Media/YouTube/Editing/2026/` folder. Set `MEDIA_BACKUP_DRIVE` to the private mount path in `~/.secrets`; the script does not discover account mounts. It checks copied bytes locally and refuses to replace an existing backup. Check Drive sync and remote visibility separately before removing original footage.
+- `docs/yt-video-backup.md` has the setup, example variable, run command, and agent procedure. Agents may source `~/.secrets` in a local shell but must not print its contents or claim the remote upload from the local copy check.
 - `~/.secrets` holds API keys/tokens and is gitignored — never commit secrets. Secrets are sourced at the end of `.zshrc`.
 - `*.backup` files are gitignored (created by `install.sh` when overwriting existing dotfiles).
 - Shell config assumes zsh with Oh My Zsh. Plugins: git, fzf-tab, zsh-autosuggestions, zsh-syntax-highlighting.

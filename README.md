@@ -112,6 +112,14 @@ pushes. Ubuntu runs only `linux-desktop.sh`; macOS runs the explicit
 apply-only list without Homebrew, packages, plugins, or Node setup. Existing
 macOS files receive a one-time adjacent `.backup` that later runs preserve.
 
+For a completed YouTube edit, close Final Cut Pro, then run:
+
+```bash
+yt-video-backup '2026/2026-11-03-my-video'
+```
+
+The command copies the whole project to `My Drive/MultiMedia Projects/Social Media/YouTube/Editing/2026/` and checks the local copy. It will not replace an existing backup. See [the setup and agent guide](docs/yt-video-backup.md) and its [private-variable example](examples/yt-video-backup.env.example) before first use. Wait for Google Drive to show **Up to date**, then verify the folder and media are visible on Drive before removing original footage. This script is tracked at `config/.scripts/yt-video-backup` and installed at `~/.scripts/yt-video-backup`.
+
 **Linux requires `--profile`.** A server or devbox provisioned by
 `server-dev.sh` runs the `config/server` profile, and a bare run would assume
 desktop and overwrite its shell config with the wrong file. Do not pass
