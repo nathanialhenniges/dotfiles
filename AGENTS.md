@@ -57,6 +57,7 @@ Personal dotfiles repo for macOS (Apple Silicon + Intel), Ubuntu Desktop, and Li
 ## Architecture
 
 - `local/orca/` holds Git-ignored personal Orca plugins cloned from the PRIVATE `nathanialhenniges/orca-monokai-pro` repository. This dotfiles repository is public: do not force-add palettes or pull live Orca settings into it. `./install.sh --orca-themes-only [--dry-run]` calls `scripts/install-orca-themes.sh` without package/bootstrap or sync work. It requires GitHub authentication, verifies PRIVATE visibility, and refuses dirty clones, unexpected origins/branches and symlink paths. See `docs/orca-themes.md`. Keep the Linux desktop allowlisted installer independent.
+  Access is checked before clone/update; a failed check must stop without theme-file changes and explain login/permission/network recovery. This is an optional restricted-access step, never a requirement for users of the public dotfiles repo.
 
 - `profiles/linux-desktop/` — Separate, portable Ubuntu Desktop profile. It
   deliberately lives outside `config/` so the broad-copy Mac and Codespaces

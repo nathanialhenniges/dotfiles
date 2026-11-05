@@ -4,12 +4,16 @@ The PRIVATE [orca-monokai-pro repository](https://github.com/nathanialhenniges/o
 
 ## Install or update
 
+This is optional and requires explicit access to the private theme repository. Cloning the public dotfiles repo does not grant permission. If your account does not have access, skip this step; the regular dotfiles installer does not fetch these themes.
+
 Install Orca 1.4.246 or later, Git and the GitHub CLI. Enable plugins in Orca Settings > Plugins. Log into the GitHub account with access to the private repository, then run from this dotfiles checkout:
 
 ```sh
 gh auth login
 ./install.sh --orca-themes-only
 ```
+
+Before cloning or updating, the installer uses your GitHub CLI account to check that the repository is accessible and still private. A failed access check stops the command before changing theme files, with guidance to check your login, permissions, or connection. It does not request access or grant permissions automatically. You can check access separately with `gh repo view nathanialhenniges/orca-monokai-pro`.
 
 This only clones or fast-forwards the private plugin, validates it, and registers it in Orca. It does not run the full dotfiles bootstrap. Preview without network or writes with `./install.sh --orca-themes-only --dry-run`.
 

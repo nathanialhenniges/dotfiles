@@ -23,7 +23,10 @@ fi
 command -v "$orca_cli" >/dev/null || die "Orca CLI not found: $orca_cli"
 command -v gh >/dev/null || die 'install GitHub CLI and run gh auth login first'
 command -v git >/dev/null || die 'install Git first'
-[[ "$(gh repo view "$repository" --json visibility --jq .visibility)" == PRIVATE ]] || die 'theme repository must remain PRIVATE'
+if ! visibility="$(gh repo view "$repository" --json visibility --jq .visibility)"; then
+  die "cannot access private repository $repository. Run gh auth login with an account granted access, or check your connection. No theme files changed."
+fi
+[[ "$visibility" == PRIVATE ]] || die 'theme repository must remain PRIVATE'
 
 for path in "$dotfiles_dir/local" "$dotfiles_dir/local/orca" "$theme_dir"; do
   [[ ! -L "$path" ]] || die "refusing symbolic-link path: $path"

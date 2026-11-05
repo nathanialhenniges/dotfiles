@@ -22,7 +22,10 @@ class OrcaThemesTest(unittest.TestCase):
         self.theme = self.root / 'local/orca/monokai-pro-octagon'
         self.env = dict(os.environ, PATH=str(self.bin) + ':' + os.environ['PATH'],
                         ORCA_CLI_COMMAND=str(self.bin / 'fake-orca'), CALLS=str(self.log))
-        self.mock('gh', '''if [[ "$2" == view ]]; then echo "${VISIBILITY:-PRIVATE}"; else mkdir -p "$4/.git"; fi''')
+        self.mock('gh', '''if [[ "$2" == view ]]; then
+  [[ "${ACCESS_DENIED:-}" != true ]] || exit 1
+  echo "${VISIBILITY:-PRIVATE}"
+else mkdir -p "$4/.git"; fi''')
         self.mock('git', '''case "$3" in
 remote) echo https://github.com/nathanialhenniges/orca-monokai-pro.git ;;
 branch) echo main ;;
@@ -51,6 +54,17 @@ esac''')
         self.env['VISIBILITY'] = 'PUBLIC'
         self.assertNotEqual(self.run_installer().returncode, 0)
         self.assertFalse(self.theme.exists())
+
+    def test_missing_access_stops_before_clone_or_update(self):
+        self.env['ACCESS_DENIED'] = 'true'
+        result = self.run_installer()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('cannot access private repository', result.stderr)
+        self.assertIn('gh auth login', result.stderr)
+        self.assertFalse(self.theme.exists())
+        (self.theme / '.git').mkdir(parents=True)
+        self.assertNotEqual(self.run_installer().returncode, 0)
+        self.assertFalse(self.log.exists())
 
     def test_dirty_clone_preserved(self):
         (self.theme / '.git').mkdir(parents=True)
