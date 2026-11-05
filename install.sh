@@ -110,17 +110,27 @@ apply_macos_dotfiles() (
 
 apply_only=false
 dry_run=false
+orca_themes_only=false
 for argument in "$@"; do
   case "$argument" in
     --apply-only) apply_only=true ;;
+    --orca-themes-only) orca_themes_only=true ;;
     --dry-run) dry_run=true ;;
     -h|--help)
-      echo "Usage: ./install.sh [--apply-only [--dry-run]]"
+      echo "Usage: ./install.sh [--apply-only [--dry-run] | --orca-themes-only [--dry-run]]"
       exit 0
       ;;
     *) die "unknown option: $argument" ;;
   esac
 done
+
+if [[ "$orca_themes_only" == true ]]; then
+  [[ "$apply_only" == false ]] || die '--orca-themes-only cannot be combined with --apply-only'
+  if [[ "$dry_run" == true ]]; then
+    exec bash "$DOTFILES_DIR/scripts/install-orca-themes.sh" --dry-run
+  fi
+  exec bash "$DOTFILES_DIR/scripts/install-orca-themes.sh"
+fi
 
 if [[ "$dry_run" == "true" && "$apply_only" != "true" ]]; then
   die "--dry-run is available only with --apply-only"
