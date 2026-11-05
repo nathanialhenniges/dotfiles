@@ -175,6 +175,8 @@ drift apart. Then run `./sync.sh` to pull the file in.
 
 ### Manual macOS installs
 
+For all eight personal Monokai Orca themes, run `./install.sh --orca-themes-only` after `gh auth login`. See [Orca theme setup](docs/orca-themes.md). Palettes are cloned from a private repository and stay out of this public repo.
+
 Apps with no Homebrew cask or Mac App Store listing. Download each one and
 move the app to `/Applications` after `brew bundle` finishes.
 
