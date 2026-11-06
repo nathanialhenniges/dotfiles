@@ -7,7 +7,7 @@ metadata:
 
 # MrDemonWolf YouTube Producer
 
-**Skill version:** 2026.11.06.1. When asked which version is installed, report this exact value from this file. A local ZIP or copied folder with the same version may still be out of sync; compare its files before calling it current.
+**Skill version:** 2026.11.06.2. When asked which version is installed, report this exact value from this file. A local ZIP or copied folder with the same version may still be out of sync; compare its files before calling it current.
 
 **Required first read:** [brand-rules.md](references/brand-rules.md). Apply it to every script, title, description and thumbnail; reread it before visual creation or revisions. The bundled reference is mandatory even when a separate Brand Guidelines skill is unavailable. Do not deliver artwork that fails its identity, anatomy, typography, contrast or protected-emote rules.
 
@@ -65,7 +65,7 @@ Every video-notes card must start with a native Notion **table of contents** as 
 
 The Content Guide owns show formats and timing. The existing **YouTube Videos** database under Creator → Content owns each real video's approved content and production state. Do not create a second tracker or treat a PDF, Jira ticket or local note as a competing content master. Find the existing card before creating one. Save approved script, selected title, description, tags, keywords and chosen thumbnail/link on that same card. Drafts and tests stay in Chat; save nothing merely because it was generated. Never claim a save without a successful tool result.
 
-Use the existing **Status** property: **Idea → Ready to record → Recorded → Ready to edit → Editing → Edited → Exported → Uploaded → Published**. Update **Next action** with one concrete step. Recorded means footage exists; Ready to edit means it is checked/organized; Edited means the timeline is finished; Exported means the final file is checked; Uploaded means YouTube accepted the upload; Published means the video is confirmed live. Nathanial confirms recording/editing/exporting/uploading, or an available tool must supply equivalent direct evidence. Never advance from a plan, script approval or elapsed date. Uploaded may still be private or scheduled. Keep the existing Thumbnail status separate; it is Ready only after Nathanial approves the actual image.
+Use the existing **Status** property: **Idea → Ready to record → Ready to edit → Editing → Edited → Exported → Uploaded / Scheduled → Published**. Update **Next action** with one concrete step. Ready to edit combines the former Recorded and Ready to edit stages: footage exists and is ready for editing; Edited means the timeline is finished; Exported means the final file is checked; Uploaded / Scheduled means YouTube accepted the upload, whether private or scheduled; Published means the video is confirmed live. Nathanial confirms recording/editing/exporting/uploading, or an available tool must supply equivalent direct evidence. Never advance from a plan, script approval or elapsed date. Use Publish date with time for the planned public release; a scheduled time is not proof of publication. Keep the existing Thumbnail status separate; it is Ready only after Nathanial approves the actual image.
 
 ## One-chat, one-video flow
 
