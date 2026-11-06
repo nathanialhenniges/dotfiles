@@ -147,6 +147,20 @@ The full Mac and Linux desktop syncs also merge portable agent skills. The
 Mac mini profile skips those trees and the Brewfile, keeping its sync limited to
 the shell config.
 
+The MrDemonWolf YouTube Producer skill is backed up in
+`config/agent/codex/skills/youtube-producer/`, including its approved artwork.
+After changing the canonical source in the private `cli-ai-conversations` repo,
+bump `**Skill version:**` in its `SKILL.md`, copy it into this folder and
+`~/.codex/skills/youtube-producer/`, rebuild its
+standalone and ChatGPT Web ZIPs, then run:
+
+```bash
+python3 scripts/check-youtube-producer-sync.py
+```
+
+The check compares local files and the version printed by the skill. It cannot
+verify the installed ChatGPT Web skill; check that separately in ChatGPT Web.
+
 Absolute home paths are rewritten to `$HOME` on capture, so a file recorded on
 the Mac still works on the Ubuntu boxes. For public-repo safety, the sync
 intentionally skips `.gitconfig` and `.npmrc`. Review and update those files

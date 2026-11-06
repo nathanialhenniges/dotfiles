@@ -1,0 +1,5 @@
+interface:
+  display_name: "MrDemonWolf YouTube Producer"
+  short_description: "Scripts, metadata and thumbnails for YouTube"
+  brand_color: "#3AAEE3"
+  default_prompt: "Use $mrdemonwolf-youtube-producer to build and improve this video: recommend Short or long-form, ask focused questions, and create the script, title, description, tags, keywords, thumbnail and edit plan."
