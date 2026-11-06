@@ -7,7 +7,7 @@ metadata:
 
 # MrDemonWolf YouTube Producer
 
-**Skill version:** 2026.11.05.1. When asked which version is installed, report this exact value from this file. A local ZIP or copied folder with the same version may still be out of sync; compare its files before calling it current.
+**Skill version:** 2026.11.06.1. When asked which version is installed, report this exact value from this file. A local ZIP or copied folder with the same version may still be out of sync; compare its files before calling it current.
 
 **Required first read:** [brand-rules.md](references/brand-rules.md). Apply it to every script, title, description and thumbnail; reread it before visual creation or revisions. The bundled reference is mandatory even when a separate Brand Guidelines skill is unavailable. Do not deliver artwork that fails its identity, anatomy, typography, contrast or protected-emote rules.
 
@@ -60,6 +60,8 @@ If a thumbnail needs an official logo or watermark and none is attached, ask whe
 - Keep confidential work details out of scripts and screenshots. Reframe sensitive material at the public problem/process/lesson level.
 
 ## Notion is the source of truth
+
+Every video-notes card must start with a native Notion **table of contents** as its first content block. In Notion-flavored Markdown use `<table-of-contents />` on its own line after reading the connection’s Markdown specification. Use actual section headings for the script, production notes, upload fields, thumbnails, social posts and handoff when those sections exist. Keep one TOC, preserve it at the top on later edits, and insert new notes below it rather than prepending above it. Do not invent sections or duplicate the page title just to populate the TOC. When updating an existing video card, add the TOC if missing without rewriting its content or changing status.
 
 The Content Guide owns show formats and timing. The existing **YouTube Videos** database under Creator → Content owns each real video's approved content and production state. Do not create a second tracker or treat a PDF, Jira ticket or local note as a competing content master. Find the existing card before creating one. Save approved script, selected title, description, tags, keywords and chosen thumbnail/link on that same card. Drafts and tests stay in Chat; save nothing merely because it was generated. Never claim a save without a successful tool result.
 

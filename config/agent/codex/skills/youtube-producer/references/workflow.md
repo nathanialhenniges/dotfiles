@@ -100,3 +100,7 @@ The current **YouTube Videos** board is under Creator → Content. Each card inc
 | Forel | Configured locally | iPhone/Mac mini routing passed dummy-file tests; real video round trip remains unverified. |
 | Clop | Optional | Image/video file compression only when a concrete file-size problem appears. |
 | Other apps from the original shortlist | Not in the first workflow | Revisit only when a specific need appears. |
+
+## Video-notes navigation
+
+Start every Notion video card with a native table of contents. Use section headings so script, production, upload copy, thumbnail options and social posts are reachable directly. Keep the TOC first when adding later notes; add it to existing cards if missing without changing approved content or production state.
