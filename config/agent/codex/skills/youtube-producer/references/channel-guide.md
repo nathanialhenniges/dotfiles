@@ -65,3 +65,7 @@ If you enjoy the videos, subscribe and join the pack. 🐺
 
 🏳️‍🌈 The Wolf Den is an inclusive community welcoming LGBTQ+ people, furries, creators, developers, gamers, and anyone looking for a friendly place to hang out.
 ```
+
+## Hashtag-first metadata
+
+Use three relevant hashtags at the end of the description; keep the title clear without hashtags by default. Do not provide a separate comma-separated tags-field list unless asked. The YouTube tags field still exists but is a low-priority optional control, not a required step in Nathanial’s workflow. Natural keyword phrases are writing guidance, not a description keyword dump.
