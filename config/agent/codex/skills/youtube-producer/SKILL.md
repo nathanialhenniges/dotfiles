@@ -7,7 +7,7 @@ metadata:
 
 # MrDemonWolf YouTube Producer
 
-**Skill version:** 2026.11.07.5. Report the value from the installed file; matching version labels alone do not prove copies match.
+**Skill version:** 2026.11.07.6. Report the value from the installed file; matching version labels alone do not prove copies match.
 
 ## Read only what this task needs
 
@@ -46,6 +46,8 @@ Use attached thumbnail examples only for hierarchy/energy, never copy another cr
 ## Notion: one real video, one card
 
 The existing **YouTube Videos** database under Creator → Content is the content/status master. Find the existing card before creating one. Drafts/tests stay in Chat unless Nathanial explicitly requests saving them. Save approved parts on that same card; never claim a write without tool success. Read the connection's Markdown specification before authoring content.
+
+When Nathanial chooses a thumbnail, append **(Picked)** to that option’s actual heading (for example `### 1. Muffin Runs This (Picked)`) so the native TOC shows the selection. Keep exactly one picked option; remove a previous marker if the choice changes, replace recommendation wording on the chosen heading, and correct stale “none selected” text. Preserve the existing page layout and other candidates.
 
 Every video card starts with one native `<table-of-contents />` block. Use actual headings for sections that exist and keep later notes below the TOC. Do not invent empty sections. The upload area should contain selected title, final description, approved thumbnail/paths, relevant upload choices and one next action. Keep optional production/research/social notes separate; do not add standalone keyword/tag/hashtag sections by default.
 
