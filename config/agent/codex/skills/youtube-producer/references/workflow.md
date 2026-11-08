@@ -104,3 +104,7 @@ The current **YouTube Videos** board is under Creator → Content. Each card inc
 ## Video-notes navigation
 
 Start every Notion video card with a native table of contents. Use section headings so script, production, upload copy, thumbnail options and social posts are reachable directly. Keep the TOC first when adding later notes; add it to existing cards if missing without changing approved content or production state.
+
+## Backup before upload handoff
+
+Before presenting a video as ready to upload, verify its project/media backup in Drive Editing and final video plus approved thumbnail in Drive To Upload. Compare local checksums, then independently confirm remote file presence and sizes using Drive tools. A CloudStorage copy alone is not remote verification; claim remote checksum verification only when supported. If cloud access is unavailable, leave verification pending. Save observed Drive links and the verification level on the existing Notion card below its TOC, then give Nathanial the Drive video, thumbnail and Notion links. Direct Remotion videos back up source/media rather than a fabricated Final Cut library.
