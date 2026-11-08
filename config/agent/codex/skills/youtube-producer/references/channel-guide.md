@@ -41,3 +41,27 @@ Current YouTube help says custom Shorts thumbnails can be uploaded through YouTu
 ## Useful chat title
 
 Suggest: `YouTube — <show> — <working title>`.
+
+## Shared YouTube description footer
+
+Use a short, unique video-specific opening first, then relevant credits/disclosures, this approved footer, and a few relevant hashtags. Preserve the short links and inclusive-community wording; avoid duplicate welcome/link/subscribe sections. Keep the complete description under 5,000 characters.
+
+```text
+🐺 Welcome to the Wolf Den.
+
+I’m Nathanial Henniges — creator, engineer, streamer, and the wolf behind MrDemonWolf. Around here you’ll find tech, creator projects, gaming, livestreams, and whatever else I’m building or exploring.
+
+“The distance between dreams and reality is called action.” 🚀
+
+🔗 JOIN THE PACK
+
+All My Links → https://mrdwolf.net/links
+Website → https://mrdwolf.net/site
+Twitch → https://mrdwolf.net/twitch
+Discord → https://mrdwolf.net/discord
+Wolf Den Merch → https://mrdwolf.net/merch
+
+If you enjoy the videos, subscribe and join the pack. 🐺
+
+🏳️‍🌈 The Wolf Den is an inclusive community welcoming LGBTQ+ people, furries, creators, developers, gamers, and anyone looking for a friendly place to hang out.
+```
