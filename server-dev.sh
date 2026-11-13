@@ -1,7 +1,7 @@
 #!/bin/bash
 # Bootstrap a remote Linux dev server: clean zsh env + dev tooling.
 # Installs everything server.sh does, plus fnm/Node, Docker, and dev CLIs
-# (gh, direnv, bun, go, build-essential, jq, eza, btop).
+# (gh, direnv, bun, build-essential, jq, eza, btop).
 #
 # ⚠️  THIS SCRIPT DOES NOT HARDEN THE MACHINE.
 #
@@ -69,7 +69,7 @@ Usage:
   bash <(curl -fsSL .../server-dev.sh) [flags]
 
 Flags:
-  --ai                      install Claude Code + Codex CLIs (+ bubblewrap sandbox)
+  --ai                      install Claude Code + Codex, claude-swap (+ bubblewrap)
   --pnpm                    install pnpm
   --agent-setup             implies --ai; also installs plugins into both CLIs,
                             skill packs/index, curated settings, and pre-registers
@@ -78,11 +78,19 @@ Flags:
                             already provisioned — no apt, no Docker, no shell
                             changes. For re-running plugin installs that failed
                             (the run prints which ones) without a full rebuild.
-  --chrome                  install headless Chrome/Chromium for browser automation
+  --extras                  install ncdu, gnupg, ffmpeg, rclone, yt-dlp, fastfetch,
+                            AWS CLI, Terraform, and act (best-effort)
+  --docs                    run unminimize (adds standard Ubuntu Server packages)
+  --playwright              install Chromium + WebKit, Linux libraries, Xvfb + xauth
+  --php                     install PHP CLI, Composer, and test extensions
+  --chrome                  install system Chrome/Chromium for browser MCP tools
+  --orca-server             install Orca's private headless runtime + user service
   -h, --help                show this help
 
 Always applied: dev toolchain (fnm + latest LTS Node, Docker, gh, direnv, bun,
-go, build-essential, jq, eza, btop), plus ~/Developer and ~/Downloads.
+build-essential, Python + venv, ripgrep, ShellCheck, zip, jq, eza, btop),
+plus ~/Developer, ~/Library, and ~/Downloads.
+Extra CLIs and unminimize are opt-in; existing packages are never removed.
 (--agent-setup-only skips all of that by design.)
 USAGE
 }
@@ -92,6 +100,11 @@ INSTALL_PNPM=""
 AGENT_SETUP=""
 AGENT_SETUP_ONLY=""
 INSTALL_CHROME=""
+INSTALL_PLAYWRIGHT=""
+INSTALL_PHP=""
+INSTALL_EXTRAS=""
+INSTALL_DOCS=""
+INSTALL_ORCA=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ai)          INSTALL_AI=1; shift ;;
@@ -100,6 +113,11 @@ while [[ $# -gt 0 ]]; do
     # Implies --agent-setup: asking for only that step is asking for that step.
     --agent-setup-only) AGENT_SETUP=1; AGENT_SETUP_ONLY=1; shift ;;
     --chrome)      INSTALL_CHROME=1; shift ;;
+    --playwright)  INSTALL_PLAYWRIGHT=1; shift ;;
+    --php)         INSTALL_PHP=1; shift ;;
+    --extras)      INSTALL_EXTRAS=1; shift ;;
+    --docs)        INSTALL_DOCS=1; shift ;;
+    --orca-server) INSTALL_ORCA=1; shift ;;
     -h|--help)     usage; exit 0 ;;
     --hostname|--hostname=*|--no-firewall)
       # Moved out with the hardening. Fail loudly rather than silently ignoring
@@ -111,7 +129,7 @@ while [[ $# -gt 0 ]]; do
       exit 1 ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Try: --ai, --pnpm, --agent-setup, --agent-setup-only, --chrome, --help" >&2
+      echo "Try: --ai, --pnpm, --agent-setup, --agent-setup-only, --chrome, --playwright, --php, --extras, --docs, --orca-server, --help" >&2
       exit 1 ;;
   esac
 done
@@ -135,8 +153,8 @@ source "$DOTFILES_DIR/lib/bootstrap.sh"
 
 create_home_dirs() {
   log "Creating home directories..."
-  mkdir -p "$HOME/Developer" "$HOME/Downloads"
-  substep "~/Developer, ~/Downloads ready"
+  mkdir -p "$HOME/Developer" "$HOME/Library" "$HOME/Downloads"
+  substep "~/Developer, ~/Library, ~/Downloads ready"
 }
 
 # Oracle VCN subnets hand out an IPv6 address AND a default IPv6 route on
@@ -169,9 +187,10 @@ prefer_ipv4_if_v6_is_dead() {
 install_dev_packages() {
   log "Installing dev packages..."
   sudo apt update
-  sudo apt install -y build-essential jq direnv btop
+  sudo apt-get install -y --no-install-recommends \
+    build-essential python3 python3-venv ripgrep shellcheck zip jq direnv btop
   # eza only ships in newer Ubuntu (24.04+) repos — tolerate its absence.
-  sudo apt install -y eza || substep "eza not in apt, skipping"
+  sudo apt-get install -y --no-install-recommends eza || substep "eza not in apt, skipping"
 
   # GitHub CLI via GitHub's official apt repo (not in default repos).
   if ! command -v gh &>/dev/null; then
@@ -183,7 +202,7 @@ install_dev_packages() {
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
       | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
     sudo apt update
-    sudo apt install -y gh
+    sudo apt-get install -y --no-install-recommends gh
   fi
 }
 
@@ -275,12 +294,6 @@ install_extra_clis() {
   fi
 }
 
-install_go() {
-  # ponytail: distro Go can lag; upgrade path = official tarball from go.dev/dl.
-  log "Installing Go..."
-  sudo apt install -y golang-go
-}
-
 install_bun() {
   if ! command -v bun &>/dev/null; then
     log "Installing Bun..."
@@ -334,8 +347,8 @@ install_pnpm() {
   local npm_cmd; npm_cmd="$(npm_global_cmd)"
   if [[ -n "$npm_cmd" ]]; then
     log "Installing pnpm..."
-    $npm_cmd install -g pnpm
-    substep "pnpm installed globally"
+    $npm_cmd install -g --prefix "$HOME/.local" pnpm
+    substep "pnpm installed in ~/.local/bin (shared across fnm Node versions)"
   else
     substep "npm not found — skipping pnpm install"
   fi
@@ -356,6 +369,10 @@ install_ai_clis() {
   fi
 }
 
+install_orca_server() {
+  bash "$DOTFILES_DIR/scripts/setup-orca-server.sh"
+}
+
 install_docker() {
   if ! command -v docker &>/dev/null; then
     log "Installing Docker..."
@@ -363,6 +380,19 @@ install_docker() {
     sudo usermod -aG docker "$USER"
     substep "Added $USER to the docker group (log out/in to take effect)"
   fi
+}
+
+install_claude_swap() {
+  log "Installing Claude multi-account switcher..."
+  export PATH="$HOME/.local/bin:$PATH"
+  command -v pipx &>/dev/null || sudo apt-get install -y --no-install-recommends pipx
+  if pipx runpip claude-swap show claude-swap >/dev/null 2>&1; then
+    substep "claude-swap already installed; upgrade explicitly with pipx upgrade claude-swap"
+  else
+    pipx install --python python3 claude-swap
+  fi
+  command -v cswap >/dev/null
+  substep "cswap ready; account sign-ins remain manual"
 }
 
 # GitHub-shorthand marketplaces + plugins, shared by both Claude Code and Codex
@@ -506,29 +536,44 @@ agent_plugin_preflight() {
   return $rc
 }
 
+install_playwright() {
+  log "Installing Playwright browsers and Linux dependencies..."
+  sudo apt-get install -y --no-install-recommends xvfb xauth
+  # Seed the cache; each project must also install browsers with its own locked CLI.
+  npx --yes playwright@1.64.1 install --with-deps chromium webkit
+  substep "For each project: install its dependencies, then run its local Playwright install --with-deps"
+}
+
+install_php() {
+  log "Installing PHP CLI and Composer..."
+  sudo apt-get install -y --no-install-recommends \
+    php-cli php-curl php-mbstring php-xml php-zip composer
+}
+
 install_chrome() {
-  # Headless browser for automation/screenshots (Playwright, Puppeteer,
-  # chrome-devtools-mcp, etc.). Google Chrome is amd64-only on Linux; fall back
-  # to Chromium on other arches.
-  if command -v google-chrome-stable &>/dev/null \
-    || command -v chromium &>/dev/null || command -v chromium-browser &>/dev/null; then
-    substep "Chrome/Chromium already installed"
+  # Google publishes native amd64 and arm64 packages; other arches use Chromium.
+  if command -v google-chrome-stable &>/dev/null; then
+    substep "Google Chrome already installed"
     return
   fi
   local arch; arch="$(dpkg --print-architecture)"
-  if [[ "$arch" == "amd64" ]]; then
-    log "Installing Google Chrome (headless)..."
-    sudo apt install -y gnupg
+  if [[ "$arch" == "amd64" || "$arch" == "arm64" ]]; then
+    log "Installing Google Chrome ($arch)..."
+    sudo apt-get install -y --no-install-recommends gnupg
     sudo mkdir -p -m 755 /etc/apt/keyrings
     curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
-      | sudo gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg
-    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
+      | sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/google-chrome.gpg
+    echo "deb [arch=$arch signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
       | sudo tee /etc/apt/sources.list.d/google-chrome.list >/dev/null
     sudo apt update
-    sudo apt install -y google-chrome-stable fonts-liberation
+    sudo apt-get install -y --no-install-recommends google-chrome-stable fonts-liberation
     substep "google-chrome-stable installed ($(google-chrome-stable --version 2>/dev/null))"
   else
-    log "Installing Chromium (headless, $arch)..."
+    if command -v chromium &>/dev/null || command -v chromium-browser &>/dev/null; then
+      substep "Chromium already installed"
+      return
+    fi
+    log "Installing Chromium ($arch)..."
     sudo apt install -y chromium fonts-liberation 2>/dev/null \
       || sudo apt install -y chromium-browser fonts-liberation
     substep "chromium installed"
@@ -555,27 +600,76 @@ install_chrome() {
 # Runs last because it is slow and reinstalls a lot of packages; nothing above
 # should wait on it, and its failure must not cost you the toolchain.
 restore_docs() {
-  command -v unminimize &>/dev/null || return 0
-  # Already unminimized? man1 is empty on a minimized image.
-  [[ -n "$(ls -A /usr/share/man/man1 2>/dev/null)" ]] && return 0
-
+  command -v unminimize &>/dev/null || { substep "unminimize is unavailable"; return 1; }
+  # Oracle kernel metapackages must advance together before unminimize's fix-policy pass.
+  if dpkg-query -W -f='${db:Status-Status}' linux-oracle 2>/dev/null | grep -qx installed; then
+    sudo apt-get install -y linux-oracle || return 1
+  fi
   log "Restoring docs and man pages (unminimize)..."
-  substep "this takes a few minutes"
-  if ! yes | sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a unminimize; then
-    substep "unminimize failed, skipping"
-    return 0
-  fi
+  local result=0
+  # yes exits with SIGPIPE when unminimize finishes; only the consumer determines success.
+  (set +o pipefail; yes | sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a unminimize) || result=$?
 
-  if systemctl list-unit-files 2>/dev/null | grep -q '^rpcbind'; then
-    sudo systemctl disable --now rpcbind.socket rpcbind &>/dev/null || true
-    substep "rpcbind disabled (unminimize pulled it in; it listens on :111)"
+  if systemctl list-unit-files rpcbind.socket --no-legend 2>/dev/null | grep -q '^rpcbind'; then
+    sudo systemctl disable --now rpcbind.socket rpcbind.service || return 1
+    substep "rpcbind disabled (not needed on this devbox)"
   fi
+  if [[ "$result" -ne 0 ]]; then
+    substep "unminimize failed; fix the reported package errors before retrying"
+    return "$result"
+  fi
+  substep "unminimize completed"
+}
+
+install_portable_mcps() {
+  local entry name url
+  for entry in \
+    'atlassian=https://mcp.atlassian.com/v1/mcp' \
+    'openaiDeveloperDocs=https://developers.openai.com/mcp' \
+    'mobbin=https://api.mobbin.com/mcp' \
+    'dub-links=https://mcp.dub.sh/mcp/dub-links'; do
+    name="${entry%%=*}"; url="${entry#*=}"
+    if command -v claude &>/dev/null; then
+      agent_try "Claude $name MCP" claude mcp add --scope user --transport http "$name" "$url" || true
+    fi
+  done
+  # `codex mcp add --url` starts OAuth immediately; provision definitions only.
+  python3 - "$HOME/.codex/config.toml" "$DOTFILES_DIR/config/agent/codex/config.toml" <<'PY'
+from pathlib import Path
+import os, re, stat, sys, tempfile, tomllib
+path, source = map(Path, sys.argv[1:])
+if path.is_symlink():
+    raise SystemExit('Refusing to replace a symbolic-link Codex config')
+original = path.read_text()
+text = original
+existing = tomllib.loads(text).get('mcp_servers', {})
+template = source.read_text()
+for name in tomllib.loads(template).get('mcp_servers', {}):
+    if name in existing:
+        continue
+    header = re.escape(f'[mcp_servers.{name}]')
+    block = re.search(r'^' + header + r'\n.*?(?=^\[|\Z)', template, re.M | re.S)
+    if not block:
+        raise SystemExit(f'Missing MCP template section: {name}')
+    text += '\n' + block[0].rstrip() + '\n'
+    print(f'Codex {name} MCP definition added; authenticate separately')
+tomllib.loads(text)
+if text != original:
+    if path.read_text() != original:
+        raise SystemExit('Codex config changed during setup; retry without overwriting it')
+    with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False) as handle:
+        handle.write(text)
+    os.chmod(handle.name, stat.S_IMODE(path.stat().st_mode))
+    os.replace(handle.name, path)
+PY
 }
 
 agent_setup() {
   # Needs the Claude Code CLI — install the AI CLIs if they're not here yet.
   command -v claude &>/dev/null || install_ai_clis
   local agent_dir="$DOTFILES_DIR/config/agent"
+
+  python3 "$DOTFILES_DIR/scripts/apply-agent-instructions.py"
 
   mkdir -p "$HOME/.claude/skills"
   if [[ -f "$HOME/.claude/settings.json" && ! -e "$HOME/.claude/settings.json.backup" ]]; then
@@ -611,9 +705,6 @@ agent_setup() {
     for p in "${AGENT_PLUGINS[@]}"; do
       agent_try "claude plugin $p" claude plugin install "$p" || true
     done
-    # Pre-register the Atlassian (Jira) MCP — OAuth login is manual, see docs.
-    agent_try "atlassian MCP" \
-      claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp || true
   else
     substep "claude CLI missing — skipped plugins + Jira MCP"
   fi
@@ -639,13 +730,14 @@ agent_setup() {
   mkdir -p "$HOME/.codex"
   if [[ -f "$HOME/.codex/config.toml" ]]; then
     substep "$HOME/.codex/config.toml exists, leaving it alone (it holds your marketplaces)"
-    substep "delete it and re-run to take the repo copy"
+    substep "missing portable MCP entries are merged below; existing values are kept"
   else
     cp "$agent_dir/codex/config.toml" "$HOME/.codex/config.toml"
   fi
 
   python3 "$DOTFILES_DIR/scripts/apply-agent-statusline.py"
   substep "shared Claude status line + Codex usage footer configured"
+  install_portable_mcps
 
   log "Installing Codex skills..."
   mkdir -p "$HOME/.codex/skills"
@@ -764,18 +856,21 @@ copy_configs "$DOTFILES_DIR/config/server"
 
 # Dev tooling
 install_dev_packages
-install_extra_clis
-install_go
+if [[ -n "$INSTALL_EXTRAS" ]]; then install_extra_clis; fi
 install_bun
 install_fnm_node
 [[ -n "$INSTALL_PNPM" ]] && install_pnpm
 [[ -n "$INSTALL_AI" ]] && install_ai_clis
 [[ -n "$AGENT_SETUP" ]] && agent_setup
+[[ -n "$INSTALL_AI$AGENT_SETUP" ]] && install_claude_swap
+if [[ -n "$INSTALL_PLAYWRIGHT" ]]; then install_playwright; fi
+if [[ -n "$INSTALL_PHP" ]]; then install_php; fi
 [[ -n "$INSTALL_CHROME" ]] && install_chrome
 install_docker
+[[ -n "$INSTALL_ORCA" ]] && install_orca_server
 
-# Slow and package-heavy, so it runs after everything that matters.
-restore_docs
+# Slow and package-heavy; only requested full documentation restores run.
+if [[ -n "$INSTALL_DOCS" ]]; then restore_docs; fi
 
 # Cloud images create the default user with a locked password, and chsh
 # authenticates through PAM against it — so this can fail on a perfectly good
@@ -800,6 +895,8 @@ echo "      already installed — they are git clones and need no login — so t
 echo "      is only about signing in. To redo the plugin step later (say, after"
 echo "      a marketplace that was down comes back), re-run just that step:"
 echo "      bash <(curl -fsSL $RAW_URL) --agent-setup-only"
+echo "    - Multi-account Claude: save each login with 'cswap add', then use"
+echo "      'cswap list' and 'cswap switch 2'. See README for safe onboarding."
 fi
 echo "    - Reach dev app ports from your laptop with SSH forwarding, e.g.:"
 echo "      ssh -L 3000:localhost:3000 $USER@<this-box>   (see README)"

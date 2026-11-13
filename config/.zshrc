@@ -128,4 +128,5 @@ eval "$(direnv hook zsh)"
 
 # Machine-local PATHs appended by application installers belong below this
 # marker. sync.sh drops this block before capturing the file.
+[[ -r "$HOME/.config/dotfiles/android-tools.zsh" ]] && source "$HOME/.config/dotfiles/android-tools.zsh"
 # ---8<--- LOCAL ---8<---

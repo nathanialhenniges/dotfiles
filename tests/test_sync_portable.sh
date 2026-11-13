@@ -28,6 +28,7 @@ eval "$(awk '/^read_local_block\(\) \{/,/^\}/' "$LIB")"
 eval "$(awk '/^copy_preserving_local\(\) \{/,/^\}/' "$LIB")"
 eval "$(awk '/^resolve_link\(\)/,/^}/' "$SYNC")"
 eval "$(awk '/^sync_tree\(\) \{/,/^\}/' "$SYNC")"
+eval "$(awk '/^sync_shared_skill_index\(\) \{/,/^\}/' "$SYNC")"
 
 pass=0; fail=0
 
@@ -181,6 +182,15 @@ check "executable bit preserved" yes "$([ -x "$TMP/out/.scripts/thing" ] && echo
 printf 'not executable\n' > "$HOME/plain"
 sync_file "$HOME/plain" "$TMP/out/plain"
 check "non-executable stays plain" no "$([ -x "$TMP/out/plain" ] && echo yes || echo no)"
+
+mkdir -p "$TMP/shared" "$TMP/claude/current"
+ln -s "$TMP/claude/current" "$TMP/shared/current"
+printf 'other-machine\tportable/other\ncurrent\told-path\n' > "$TMP/shared-index.tsv"
+sync_shared_skill_index "$TMP/shared" "$TMP/shared-index.tsv" "$TMP/claude"
+sync_shared_skill_index "$TMP/shared" "$TMP/shared-index.tsv" "$TMP/claude"
+check "other machine's shared mapping survives" yes "$(grep -Fq $'other-machine\tportable/other' "$TMP/shared-index.tsv" && echo yes || echo no)"
+check "current shared mapping replaces old path" yes "$(grep -Fxq $'current\tcurrent' "$TMP/shared-index.tsv" && echo yes || echo no)"
+check "repeated shared captures avoid duplicates" 2 "$(wc -l < "$TMP/shared-index.tsv" | tr -d ' ')"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

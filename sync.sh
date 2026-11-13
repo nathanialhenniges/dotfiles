@@ -169,9 +169,12 @@ sync_tree() { # source destination [extra rsync options]
 }
 
 sync_shared_skill_index() { # source destination claude_skills
-  local source=$1 destination=$2 claude_skills=$3 entry name target relative
+  local source=$1 destination=$2 claude_skills=$3 entry name target relative existing_index
+  existing_index=$(cat "$destination" 2>/dev/null || true)
   mkdir -p "$(dirname "$destination")"
   {
+    # Keep collections captured on other machines; current mappings win.
+    [ -z "$existing_index" ] || printf '%s\n' "$existing_index"
     for entry in "$source"/*; do
       [ -e "$entry" ] || [ -L "$entry" ] || continue
       name=${entry##*/}
@@ -189,7 +192,8 @@ sync_shared_skill_index() { # source destination claude_skills
       fi
       printf '%s\t%s\n' "$name" "$relative"
     done
-  } | LC_ALL=C sort > "$destination"
+  } | awk -F '\t' 'NF == 2 { rows[$1] = $0 } END { for (name in rows) print rows[name] }' |
+    LC_ALL=C sort > "$destination"
 }
 
 echo "Capturing the $OS profile into ${DOTFILES_DIR##*/}/"

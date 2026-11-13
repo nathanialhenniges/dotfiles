@@ -83,11 +83,22 @@ esac
 if [[ "$dry_run" == "true" ]]; then
   printf 'Would fetch origin/main and merge it with --ff-only.\n'
   "${apply_command[@]}" --dry-run
+  if [[ "$platform" == Darwin && -z "$profile" ]]; then
+    printf 'Would upgrade claude-swap if installed via pipx.\n'
+  fi
   exit 0
 fi
 
 git -C "$repo_dir" fetch origin main
 git -C "$repo_dir" merge --ff-only origin/main
 "${apply_command[@]}"
+
+if [[ "$platform" == Darwin && -z "$profile" ]]; then
+  if command -v pipx >/dev/null && pipx runpip claude-swap show claude-swap >/dev/null 2>&1; then
+    pipx upgrade claude-swap
+  else
+    printf 'claude-swap is not installed via pipx; see README.md for setup.\n'
+  fi
+fi
 
 printf 'Dotfiles updated and applied. No commit or push was made.\n'

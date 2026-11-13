@@ -1,8 +1,16 @@
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+elif [[ -x /usr/local/bin/brew ]]; then
+  export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
+fi
+
 export ZSH="$HOME/.oh-my-zsh"
 plugins=(git fzf-tab zsh-autosuggestions zsh-syntax-highlighting)
 ZSH_THEME="robbyrussell"
 [[ -x "$(command -v oh-my-posh 2>/dev/null)" ]] && ZSH_THEME=""
 
+# Remote terminals must reach a prompt without waiting for updater input.
+zstyle ':omz:update' mode reminder
 if [[ -s "$ZSH/oh-my-zsh.sh" ]]; then
   source "$ZSH/oh-my-zsh.sh"
 fi
@@ -12,6 +20,7 @@ fi
 # Optional CLI integrations stay quiet when the mini does not have dev tools.
 if command -v fnm &>/dev/null; then
   eval "$(fnm env --use-on-cd --shell zsh)"
+  fnm use default --silent-if-unchanged &>/dev/null || true
 fi
 command -v zoxide &>/dev/null && eval "$(zoxide init zsh --cmd cd)"
 
@@ -53,5 +62,7 @@ command -v direnv &>/dev/null && eval "$(direnv hook zsh)"
 
 # Keep user-specific PATH edits outside the shared profile.
 [[ -d "$HOME/.local/bin" && ":$PATH:" != *":$HOME/.local/bin:"* ]] && export PATH="$HOME/.local/bin:$PATH"
+
+[[ -r "$HOME/.config/dotfiles/android-tools.zsh" ]] && source "$HOME/.config/dotfiles/android-tools.zsh"
 
 # ---8<--- LOCAL ---8<---

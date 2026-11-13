@@ -111,18 +111,60 @@ apply_macos_dotfiles() (
 apply_only=false
 dry_run=false
 orca_themes_only=false
+orca_server_only=false
+orca_server=false
+orca_tunnels_only=false
+android_tools_only=false
+android_tools=false
 for argument in "$@"; do
   case "$argument" in
     --apply-only) apply_only=true ;;
     --orca-themes-only) orca_themes_only=true ;;
+    --orca-server-only) orca_server_only=true ;;
+    --orca-server) orca_server=true ;;
+    --orca-tunnels-only) orca_tunnels_only=true ;;
+    --android-tools-only) android_tools_only=true ;;
+    --android-tools) android_tools=true ;;
     --dry-run) dry_run=true ;;
     -h|--help)
-      echo "Usage: ./install.sh [--apply-only [--dry-run] | --orca-themes-only [--dry-run]]"
+      echo "Usage: ./install.sh [--orca-server] [--android-tools] | --apply-only | --orca-themes-only | --orca-server-only | --orca-tunnels-only | --android-tools-only [--dry-run]"
       exit 0
       ;;
     *) die "unknown option: $argument" ;;
   esac
 done
+
+if [[ "$orca_tunnels_only" == true ]]; then
+  [[ "$OS" == Darwin ]] || die 'Orca tunnels are the Mac client side; run them on the laptop'
+  [[ "$apply_only" == false && "$orca_themes_only" == false && "$orca_server_only" == false && "$orca_server" == false && "$android_tools_only" == false && "$android_tools" == false ]] || die '--orca-tunnels-only cannot be combined with another setup option'
+  if [[ "$dry_run" == true ]]; then
+    exec bash "$DOTFILES_DIR/scripts/orca-tunnels.sh" install --dry-run
+  fi
+  exec bash "$DOTFILES_DIR/scripts/orca-tunnels.sh" install
+fi
+
+if [[ "$android_tools_only" == true || "$android_tools" == true ]]; then
+  [[ "$OS" == Darwin ]] || die 'Android tools setup supports macOS only'
+  [[ "$apply_only" == false && "$orca_themes_only" == false && "$orca_server_only" == false ]] || die 'Android tools cannot be combined with another targeted setup'
+fi
+if [[ "$android_tools_only" == true ]]; then
+  [[ "$android_tools" == false && "$orca_server" == false ]] || die '--android-tools-only cannot be combined with full-install options'
+  if [[ "$dry_run" == true ]]; then
+    exec bash "$DOTFILES_DIR/scripts/setup-android-tools.sh" --dry-run
+  fi
+  exec bash "$DOTFILES_DIR/scripts/setup-android-tools.sh"
+fi
+
+if [[ "$orca_server_only" == true || "$orca_server" == true ]]; then
+  [[ "$OS" == Darwin ]] || die 'use server-dev.sh --orca-server on Linux'
+  [[ "$apply_only" == false && "$orca_themes_only" == false ]] || die 'Orca server setup cannot be combined with apply-only or themes-only'
+fi
+if [[ "$orca_server_only" == true ]]; then
+  if [[ "$dry_run" == true ]]; then
+    exec bash "$DOTFILES_DIR/scripts/setup-orca-server.sh" --dry-run
+  fi
+  exec bash "$DOTFILES_DIR/scripts/setup-orca-server.sh"
+fi
 
 if [[ "$orca_themes_only" == true ]]; then
   [[ "$apply_only" == false ]] || die '--orca-themes-only cannot be combined with --apply-only'
@@ -154,10 +196,19 @@ if [[ "$OS" == "Darwin" ]]; then
   fi
 
   # Install packages from Brewfile
-  brew bundle --file="$DOTFILES_DIR/Brewfile"
+  brew bundle --file="$DOTFILES_DIR/Brewfile" || die "Homebrew bundle failed"
+
+  # Use Homebrew's supported Python rather than the macOS system interpreter.
+  python="$(brew --prefix python@3.13)/bin/python3.13"
+  "$python" -c 'import sys; assert sys.version_info >= (3, 12)' || die "claude-swap requires Python 3.12+"
+  if pipx runpip claude-swap show claude-swap >/dev/null 2>&1; then
+    echo "claude-swap already installed; use update.sh to upgrade it."
+  else
+    pipx install --python "$python" claude-swap || die "claude-swap installation failed"
+  fi
 else
   # Linux/Codespaces: Install essentials via apt
-  sudo apt update && sudo apt install -y zsh git curl wget fzf
+  sudo apt update && sudo apt install -y zsh git curl wget fzf python3
 fi
 
 # Install Oh My Zsh if missing
@@ -213,6 +264,15 @@ if command -v fnm &>/dev/null; then
   fnm install --latest
   fnm default "$(fnm ls | head -1 | awk '{print $2}')"
   echo "Node.js $(node --version) installed and set as default via fnm"
+fi
+
+python3 "$DOTFILES_DIR/scripts/apply-agent-instructions.py" || die 'Agent instruction setup failed'
+
+if [[ "$orca_server" == true ]]; then
+  bash "$DOTFILES_DIR/scripts/setup-orca-server.sh" || die 'Orca server setup failed'
+fi
+if [[ "$android_tools" == true ]]; then
+  bash "$DOTFILES_DIR/scripts/setup-android-tools.sh" || die 'Android tools setup failed'
 fi
 
 echo "Done! Restart your terminal to apply changes."

@@ -44,6 +44,15 @@ cat > "$fake_bin/id" <<'EOF'
 #!/bin/sh
 if [ "${1:-}" = "-u" ]; then printf '501\n'; else exec /usr/bin/id "$@"; fi
 EOF
+cat > "$fake_bin/pipx" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$HOME/pipx-calls"
+case "$*" in
+  'runpip claude-swap show claude-swap'|'upgrade claude-swap') exit 0 ;;
+  *) exit 1 ;;
+esac
+EOF
+chmod +x "$fake_bin/pipx"
 chmod +x "$fixture/install.sh" "$fixture/update.sh" "$fixture/linux-desktop.sh" \
   "$fixture/mini.sh" "$fake_bin/uname" "$fake_bin/id"
 
@@ -73,12 +82,14 @@ cmp -s "$fixture/config/.config/ghostty/config" \
 [[ ! -e "$home_dir/server" && ! -e "$home_dir/agent" && ! -e "$home_dir/sharedhosting" ]] || \
   fail "excluded profile was applied"
 
+grep -qx 'upgrade claude-swap' "$home_dir/pipx-calls" || fail "macOS update did not upgrade claude-swap"
 mini_home="$test_root/mini-home"
 mkdir -p "$mini_home"
 mini_dry_run="$(env PATH="$fake_bin:$PATH" HOME="$mini_home" "$fixture/update.sh" --profile mac-mini --dry-run)"
 [[ "$mini_dry_run" == *"Would apply $mini_home/.zshrc"* ]] || fail "Mac mini dry run did not use its profile"
 [[ -z "$(find "$mini_home" -mindepth 1 -print -quit)" ]] || fail "Mac mini dry run wrote to HOME"
 mini_output="$(env PATH="$fake_bin:$PATH" HOME="$mini_home" "$fixture/update.sh" --profile mac-mini)"
+[[ ! -e "$mini_home/pipx-calls" ]] || fail "Mac mini invoked pipx"
 grep -q 'robbyrussell' "$mini_home/.zshrc" || fail "Mac mini profile was not applied"
 grep -q 'No commit or push was made' <<< "$mini_output" || fail "Mac mini update completion was unclear"
 grep -Fq 'plugins=(git fzf-tab zsh-autosuggestions zsh-syntax-highlighting)' "$mini_home/.zshrc" || \
@@ -145,6 +156,7 @@ server_dry="$(env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$server_home" "$
 [[ "$server_dry" == *"would apply .zshrc"* ]] || fail "server profile not dispatched"
 [[ -z "$(find "$server_home" -mindepth 1 -print -quit)" ]] || fail "server dry run wrote files"
 env FAKE_UNAME=Linux PATH="$fake_bin:$PATH" HOME="$server_home" "$fixture/update.sh" --profile server >/dev/null
+[[ ! -e "$server_home/pipx-calls" ]] || fail "server invoked pipx"
 cmp "$fixture/config/server/.zshrc" "$server_home/.zshrc" || fail "server shell not applied"
 printf 'host-only setting\n' > "$server_home/.zshrc.local"
 printf '\n# new server alias\n' >> "$fixture/config/server/.aliases"

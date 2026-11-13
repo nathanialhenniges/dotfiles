@@ -20,4 +20,6 @@ fi
 [[ -d "$HOME/.lmstudio/bin" && ":$PATH:" != *":$HOME/.lmstudio/bin:"* ]] && \
   export PATH="$PATH:$HOME/.lmstudio/bin"
 
+[[ -r "$HOME/.config/dotfiles/android-tools.zsh" ]] && source "$HOME/.config/dotfiles/android-tools.zsh"
+
 # ---8<--- LOCAL ---8<---

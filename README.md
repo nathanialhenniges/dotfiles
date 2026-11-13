@@ -109,8 +109,90 @@ For a direct checkout on either macOS or Ubuntu Desktop, use the guarded updater
 It requires the exact `nathanialhenniges/dotfiles` origin, the `main` branch,
 and a clean worktree. It fetches and fast-forwards only, never commits or
 pushes. Ubuntu runs only `linux-desktop.sh`; macOS runs the explicit
-apply-only list without Homebrew, packages, plugins, or Node setup. Existing
+apply-only list, then upgrades claude-swap if already installed via pipx. It does
+not rerun Homebrew, plugin, or Node setup. Existing
 macOS files receive a one-time adjacent `.backup` that later runs preserve.
+
+### claude-swap and CodexBar (standard macOS only)
+
+[claude-swap](https://github.com/realiti4/claude-swap) requires Python 3.12+.
+The Brewfile manages pipx and Python 3.13. Full `./install.sh` installs
+claude-swap only when missing; reruns leave its version alone. For an existing
+Mac, run these targeted commands from this checkout instead of rerunning the
+full bootstrap:
+
+```bash
+brew install pipx python@3.13
+# Only if not already installed via pipx:
+pipx runpip claude-swap show claude-swap >/dev/null 2>&1 || \
+  pipx install --python "$(brew --prefix python@3.13)/bin/python3.13" claude-swap
+command -v pipx
+command -v cswap
+cswap --help
+```
+
+The managed Zsh files already add `~/.local/bin` once when it exists. Open a
+new terminal after installation. `./update.sh` upgrades an existing pipx
+installation with `pipx upgrade claude-swap`; `--dry-run` makes no changes.
+You can also run that pipx command directly. Apply-only, Mac mini, Linux, and
+server shell-only profiles do not install or upgrade this tool. Full dev-server
+`--ai` / `--agent-setup` runs install it separately as described below.
+
+Account setup is manual:
+
+```bash
+cswap add
+cswap list
+cswap --list --json
+```
+
+Leave credentials with claude-swap and macOS Keychain. Never copy credentials,
+tokens, or account exports into this repository. Setup does not add or switch
+accounts, enable automatic switching, log out, or modify Claude Code sessions.
+
+In CodexBar, open **Preferences → Providers → Claude**, enable **Read accounts
+from claude-swap**, and set the executable path to the exact output of
+`command -v cswap` on that Mac. Refresh CodexBar and verify account monitoring;
+CodexBar uses `cswap --list --json` for account information.
+
+### Claude multiple accounts on a Linux dev server
+
+Full `server-dev.sh --ai` or `--agent-setup` installs the same
+[claude-swap](https://github.com/realiti4/claude-swap) tool through pipx and
+adds `~/.local/bin` to the server shell PATH. Existing installs are retained;
+upgrade explicitly with `pipx upgrade claude-swap`. The package-free
+`--agent-setup-only` retry does not install the switcher.
+
+Sign into and save each subscription account on the server, one at a time:
+
+```bash
+claude auth login
+cswap add --alias personal
+claude auth login
+cswap add --alias work
+cswap list
+```
+
+Choose the corresponding account in your laptop browser for each login.
+Do not log out between accounts: upstream warns that logout can revoke the
+saved refresh token. Never copy Mac credentials or account exports to the repo.
+Setup installs the tool only; it does not register accounts or enable rotation.
+
+```bash
+cswap run personal --no-share-history
+cswap run work --no-share-history
+# Or change the shared default login used by plain claude:
+cswap switch work
+```
+
+`run ... --no-share-history` launches that account in this terminal with its
+own chat history. `switch` changes the shared default login; it does not
+separate existing transcripts. Quit/relaunch Claude to make the selected
+account unambiguous. These are convenience boundaries within one Linux user,
+not separate OS security boundaries. Anthropic also documents native
+[separate configuration directories](https://code.claude.com/docs/en/authentication#log-in-with-multiple-accounts)
+for independent logins, settings, and history without a switcher.
+
 
 For a completed YouTube edit, close Final Cut Pro, then run:
 
@@ -287,7 +369,7 @@ cd ~/Developer/nathanialhenniges/dotfiles
   Oh My Zsh, and minimal server configs from `config/server/`.
 - `./server-dev.sh` — Bootstrap a remote Linux **dev** server:
   everything `server.sh` does, plus fnm + Node, Docker, and dev
-  CLIs (gh, direnv, bun, go, build-essential, jq, eza, btop),
+  CLIs (gh, direnv, bun, build-essential, jq, eza, btop),
   plus a MacBook-parity set (ncdu, gnupg, ffmpeg, rclone, yt-dlp,
   fastfetch, awscli, terraform, act) installed best-effort.
 - `lib/bootstrap.sh` — Shared helper functions sourced by
@@ -414,6 +496,46 @@ Changed files are backed up under `~/.server-dotfiles-backup.XXXXXX/`.
 To roll back, copy the needed files from that backup into the same paths under
 `~`, then reconnect. Updates are manual; there is no unattended pull job.
 
+## Clone development repositories
+
+The dev-server bootstrap creates `~/Developer`, `~/Library`, and `~/Downloads`.
+It keeps the existing `~/dotfiles` checkout; Snap manages its own `~/snap` folder.
+
+Run the one-off clone script separately after GitHub authentication:
+
+```bash
+gh auth login --hostname github.com
+bash ~/dotfiles/scripts/clone-dev-repos.sh --dry-run
+bash ~/dotfiles/scripts/clone-dev-repos.sh
+```
+
+Repositories go into `~/Developer/mrdemonwolf/`,
+`~/Developer/nathanialhenniges/`, and `~/Developer/kommitai/`. All API pages are
+read, including archived repos and forks. Private repositories require access
+for the authenticated account and any required org SSO/token authorization.
+Existing files, directories, and symlinks at repo destinations are skipped;
+existing checkouts are never pulled or modified. Symlinked Developer/owner
+folders are refused. Listing or clone failures produce a nonzero exit while
+other owners/repos continue. Re-running retries missing repos. A failed clone
+may leave a directory that needs inspection before retrying.
+
+For an external drive, set `DEV_REPOS_ROOT` to its real, existing Developer
+directory (not a symlink). A missing configured directory stops the script
+before any GitHub calls or writes, so an unmounted drive cannot silently fall
+back to the internal home folder.
+
+To persist the choice for noninteractive Orca commands too, save the absolute
+path as one line in `~/.config/dotfiles/dev-repos-root`. Keep this machine-local
+file out of Git. An explicit `DEV_REPOS_ROOT` overrides the saved path.
+
+```bash
+DEV_REPOS_ROOT="/Volumes/Development/Developer" bash ~/dotfiles/scripts/clone-dev-repos.sh --dry-run
+```
+
+The script does not clone automatically during setup, install project
+dependencies or initialize submodules. Normal Git history and any configured
+Git LFS smudge downloads can use substantial disk space.
+
 ## Dev Server Setup
 
 Bootstrap a remote **Linux dev server** — everything `server.sh`
@@ -449,9 +571,24 @@ bash <(curl -fsSL https://raw.githubusercontent.com/nathanialhenniges/dotfiles/m
 > silently ignored — being quietly dropped is how you end up believing
 > a box was hardened.
 
+Default installs include Node LTS, Bun, Docker, GitHub CLI, build tools, Python
+with venv, ripgrep, ShellCheck, zip, and shell utilities. Go is not installed. Media/infrastructure extras and the full
+Ubuntu docs restore are opt-in here. The private devbox wrapper requests the
+full docs restore. Existing packages are never removed by this script.
+
 Optional flags:
 
 ```bash
+# browser tests: Chromium + WebKit and their Linux libraries
+bash <(curl -fsSL .../server-dev.sh) --playwright
+
+# WordPress/PHP development (CLI only)
+bash <(curl -fsSL .../server-dev.sh) --php
+
+# optional extra CLI bundle or full docs restore (flags combine)
+bash <(curl -fsSL .../server-dev.sh) --extras
+bash <(curl -fsSL .../server-dev.sh) --docs
+
 # also install the Claude Code + Codex CLIs (npm globals)
 bash <(curl -fsSL .../server-dev.sh) --ai
 
@@ -470,8 +607,57 @@ bash <(curl -fsSL .../server-dev.sh) --chrome
 
 `--ai` installs `@anthropic-ai/claude-code` and `@openai/codex`
 globally via npm, plus `bubblewrap` (Codex's Linux sandbox);
-`--pnpm` installs pnpm (both run after Node is set up, so npm is
+`--pnpm` installs pnpm under `~/.local/bin`, so it stays available across
+fnm Node versions (both run after Node is set up, so npm is
 available). Flags combine, e.g. `--agent-setup --chrome`.
+
+`--playwright` seeds Chromium and WebKit with Playwright 1.64.1, including
+Linux libraries, Xvfb, and xauth for headed tests. It installs no global Playwright package. After installing a
+project's locked dependencies, run its own Playwright CLI to get matching
+browser binaries, for example from a workspace with `@playwright/test`:
+
+```bash
+npx --no-install playwright install --with-deps chromium
+# For projects using iPhone/Safari emulation:
+npx --no-install playwright install --with-deps webkit
+```
+
+For headed tests on a server without a display:
+
+```bash
+xvfb-run -a npx --no-install playwright test --headed --workers=1
+```
+
+For Playwright's graphical UI, start this inside the project's Playwright
+workspace on the server:
+
+```bash
+xvfb-run -a npx --no-install playwright test --ui --ui-host=127.0.0.1 --ui-port=9323 --workers=1
+```
+
+On the Mac, forward that port using the server's working SSH alias/address:
+
+```bash
+ssh -N -L 9323:127.0.0.1:9323 user@devbox
+```
+
+Open `http://127.0.0.1:9323` in the Mac browser. This shows Playwright's test UI
+and trace snapshots; it is not a remote desktop or a streamed live browser.
+The listener stays on loopback and needs no public firewall port. One worker
+is the conservative starting point for a 2-core, 12 GB devbox. No desktop,
+VNC service, or background Xvfb service is installed.
+
+Only the selected browsers are installed; Firefox is not included by default.
+System Chrome (`--chrome`) is separate and is only needed for tools configured
+to use that system browser. Google Chrome is installed from Google's apt repo
+on both amd64 and arm64; other architectures keep the Chromium fallback.
+`--php` installs the distro PHP CLI (8.3 on Ubuntu
+24.04), Composer, and curl/mbstring/XML/zip extensions. Apache, PHP-FPM, databases,
+and global PHPUnit/PHPStan/PHPCS are not installed. Use `composer install` in
+the project for its locked test tools. Python packages belong in project venvs.
+Project manifests may pin different Bun/Node releases; use those versions for
+reproducible builds. Cloudflare, Expo/EAS, linters, and other JS CLIs should use
+the project's installed dependencies or its documented invocation.
 
 Run `--help` (or `-h`) for the full flag list:
 
@@ -497,8 +683,86 @@ Replicates the Claude Code + Codex setup on the box (implies
 - Installs the **same plugins into Codex** — adds the same GitHub
   marketplaces and installs the plugin set via `codex plugin
   marketplace add` / `codex plugin add`.
-- Pre-registers the Atlassian (Jira/Confluence) MCP for both
-  Claude Code and Codex.
+- Registers Jira/Atlassian, OpenAI Developer Docs, Mobbin, and Dub Links for
+  both clients. Claude definitions use user scope, so they apply to every
+  project. Existing Codex MCP definitions and plugin registrations are preserved.
+  Authentication remains a separate owner step; no Mac credentials are copied.
+
+`--orca-server` also configures a private Orca runtime reached through SSH.
+The targeted Mac equivalent is `bash install.sh --orca-server-only`.
+On the Mac client, `bash install.sh --orca-tunnels-only` keeps the SSH forwards
+running (`orca-tunnels status`).
+See [Orca server setup](docs/orca-server.md) for pairing and client commands.
+
+### Android development with a physical device on macOS
+
+Run the targeted setup on an existing Mac with Homebrew:
+
+```bash
+cd ~/dotfiles
+bash install.sh --android-tools-only --dry-run
+bash install.sh --android-tools-only
+```
+
+On a new Mac, `bash install.sh --android-tools` includes this step in the full
+bootstrap. The targeted command leaves the rest of the workstation setup alone.
+
+This reuses Java 21 or installs Temurin 21, adds Android SDK command-line tools,
+ADB, Android platforms 36/37.0 and build-tools 36/37, and accepts the required
+SDK package licenses. Existing packages remain. It installs no Android Studio
+IDE, emulator, system images, or NDK. The default SDK is `~/Library/Android/sdk`;
+an existing `ANDROID_HOME` selects another SDK. Java 21 and SDK paths are saved
+in a machine-local Zsh file, loaded by both login and interactive shells, with
+each original startup file backed up once.
+Repeat runs reuse the JDK and SDK packages already installed.
+
+Open a new terminal, then connect the phone to that Mac with a data-capable
+USB cable, enable USB debugging, and approve that Mac on the phone:
+
+```bash
+adb devices -l
+adb install -r /path/to/app-debug.apk
+```
+
+For Android 11 or newer on the same trusted LAN, wireless debugging can replace
+USB. Enable it on the phone, select pairing with a code, then run:
+
+```bash
+adb pair PHONE_IP:PAIRING_PORT
+adb connect PHONE_IP:DEBUGGING_PORT
+adb devices -l
+```
+
+Enter the temporary pairing code at ADB's prompt. Pairing and debugging ports
+may differ. Each Mac needs its own phone authorization; do not copy ADB private
+keys between Macs or publish ADB ports. APK installation and device tests happen
+only after you connect and authorize the device.
+
+For a paired phone that disconnects, `adb mdns services` lists its current
+`_adb-tls-connect._tcp` address; use that debugging port with `adb connect`.
+The pairing and debugging ports are different and can change. Unlock the phone
+normally and keep its screen awake for UI tests. A black screenshot while the
+display is asleep is not proof that capture is blocked.
+
+Select the specific phone when sending input or capturing a screenshot:
+
+```bash
+device=PHONE_IP:DEBUGGING_PORT
+adb -s "$device" shell input keyevent KEYCODE_WAKEUP
+adb -s "$device" shell input keyevent KEYCODE_HOME
+adb -s "$device" exec-out screencap -p > "$HOME/Downloads/android-screen.png"
+```
+
+The screenshot is saved on whichever Mac runs this command. Keep screenshots
+private; do not commit phone images, pairing codes, or ADB keys. These commands
+do not unlock the phone or prove that an application builds or runs correctly.
+
+### Global agent instructions
+
+Global communication preferences live in `config/agent/shared/communication.md`.
+Run `python3 scripts/apply-agent-instructions.py` to apply them to Codex, Claude,
+and the home-level `AGENTS.md` without replacing personal instructions. New chats
+load the ADHD-friendly summary, table, checklist, and visual preferences.
 
 `--ai` (and therefore `--agent-setup`) also installs
 `bubblewrap`, which Codex needs for its Linux sandbox.
