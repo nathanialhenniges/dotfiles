@@ -4,3 +4,6 @@ Desktop.ini
 *.backup
 # Personal Orca themes; this repository is public.
 /local/orca/
+
+# Python bytecode from running tests
+__pycache__/
