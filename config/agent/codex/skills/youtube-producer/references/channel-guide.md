@@ -68,6 +68,6 @@ If you enjoy the videos, subscribe and join the pack. 🐺
 
 ## Hashtag-first metadata
 
-Use three relevant hashtags at the end of the description; keep the title clear without hashtags by default. Do not provide a separate comma-separated tags-field list unless asked. The YouTube tags field still exists but is a low-priority optional control, not a required step in Nathanial’s workflow. Natural keyword phrases are writing guidance, not a description keyword dump.
+Use three relevant hashtags at the end of the description; keep the title clear without hashtags by default. Never suggest, include or bring up a separate tags field in Nathanial's video workflow. Natural keyword phrases are writing guidance, not a description keyword dump.
 
 Keep YouTube hashtags inside the final description only. Do not add a separate Hashtags heading or duplicate copy block in Chat or Notion; platform-specific social captions may retain their own relevant hashtags.

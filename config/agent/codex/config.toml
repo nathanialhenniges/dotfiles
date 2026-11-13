@@ -22,3 +22,12 @@ status_line_use_colors = true
 command = "npx"
 args = ["-y", "mcp-remote", "https://mcp.atlassian.com/v1/mcp"]
 startup_timeout_sec = 120
+
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
+
+[mcp_servers.mobbin]
+url = "https://api.mobbin.com/mcp"
+
+[mcp_servers.dub-links]
+url = "https://mcp.dub.sh/mcp/dub-links"

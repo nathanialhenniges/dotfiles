@@ -17,7 +17,6 @@ Keep the closed project/media backup in Drive Editing and final upload assets in
 
 ## What stays optional
 
-- Tags-field list: omit unless asked. YouTube still supports tags, but says their usual discovery role is small. [Tags](https://support.google.com/youtube/answer/146402?hl=en).
 - Separate keyword or hashtag sections: omit from upload notes. Use relevant phrases naturally; put three relevant hashtags at the end of the description by default. Three is our preference, not a required number. [Hashtags](https://support.google.com/youtube/answer/6390658?hl=en).
 - Chapters, end screens, cards, pinned comments and social posts: include only when useful to the video or requested. Do not invent chapter times or force chapters into a single-song lyric video.
 - PDFs/ZIP handoffs and extra title variants: only when requested or a meaningful decision needs them.

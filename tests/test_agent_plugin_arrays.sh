@@ -214,7 +214,8 @@ check "shared index recreated" "yes" \
   "$(grep -Fq 'done < "$agent_dir/shared-skills.tsv"' "$SCRIPT" && echo yes || echo no)"
 missing_shared=$(
   while IFS=$'\t' read -r _ path; do
-    [ -f "$ROOT/config/agent/claude/skills/$path/SKILL.md" ] || echo "$path"
+    target="$ROOT/config/agent/claude/skills/$path"
+    [ -d "$target" ] && [ -n "$(find "$target" -name SKILL.md -print -quit)" ] || echo "$path"
   done < "$ROOT/config/agent/shared-skills.tsv"
 )
 check "shared index targets exist" "" "$missing_shared"
